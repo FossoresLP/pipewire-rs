@@ -8,6 +8,7 @@ use std::{pin::Pin, ptr};
 
 use crate::{
     proxy::{Listener, Proxy, ProxyT},
+    spa::Direction,
     types::ObjectType,
 };
 use spa::dict::ForeignDict;
@@ -61,12 +62,6 @@ pub struct PortListenerLocalBuilder<'a> {
     cbs: ListenerLocalCallbacks,
 }
 
-#[derive(Debug)]
-pub enum Direction {
-    Input,
-    Output,
-}
-
 pub struct PortInfo {
     ptr: ptr::NonNull<pw_sys::pw_port_info>,
     props: Option<ForeignDict>,
@@ -87,11 +82,7 @@ impl PortInfo {
     pub fn direction(&self) -> Direction {
         let direction = unsafe { self.ptr.as_ref().direction };
 
-        match direction {
-            spa_sys::spa_direction_SPA_DIRECTION_INPUT => Direction::Input,
-            spa_sys::spa_direction_SPA_DIRECTION_OUTPUT => Direction::Output,
-            _ => panic!("Invalid direction: {}", direction),
-        }
+        Direction::from_raw(direction)
     }
 
     pub fn change_mask(&self) -> PortChangeMask {

@@ -10,11 +10,13 @@ pub mod dict;
 pub use dict::*;
 pub mod result;
 pub use result::*;
+mod direction;
 pub mod hook;
 pub mod interface;
 pub mod list;
 pub mod pod;
 pub mod utils;
+pub use direction::*;
 
 /// prelude module re-exporing all the traits providing public API.
 pub mod prelude {
