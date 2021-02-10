@@ -136,7 +136,27 @@ impl Core {
             Err(Error::CreationFailed)
         }
     }
+
+    /// Destroy the object on the remote server represented by the provided proxy.
+    ///
+    /// The proxy will be destroyed alongside the server side ressource, as it is no longer needed.
+    /* FIXME: Return type is a SPA Result as seen here:
+       https://gitlab.freedesktop.org/pipewire/pipewire/-/blob/master/doc/spa/design.md#error-codes.
+       A type that represents this more idomatically should be returned.
+       See also: https://gitlab.freedesktop.org/pipewire/pipewire-rs/-/merge_requests/9#note_689093
+    */
+    pub fn destroy_object<P: ProxyT>(&self, proxy: P) -> i32 {
+        unsafe {
+            spa_interface_call_method!(
+                self.0,
+                pw_sys::pw_core_methods,
+                destroy,
+                proxy.upcast_ref().as_ptr() as *mut c_void
+            )
+        }
+    }
 }
+
 #[derive(Default)]
 struct ListenerLocalCallbacks {
     info: Option<Box<dyn Fn(&Info)>>,
