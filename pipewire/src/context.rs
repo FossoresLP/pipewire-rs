@@ -1,7 +1,7 @@
 // Copyright 2020, Collabora Ltd.
 // SPDX-License-Identifier: MIT
 
-use std::ptr;
+use std::{os::unix::prelude::RawFd, ptr};
 
 use crate::core_::Core;
 use crate::error::Error;
@@ -31,6 +31,19 @@ impl<T: Loop + Clone> Context<T> {
             let core = pw_sys::pw_context_connect(self.0, properties, 0);
             if core.is_null() {
                 // TODO: check errno to set better error
+                Err(Error::CreationFailed)
+            } else {
+                Ok(Core::from_ptr(core))
+            }
+        }
+    }
+
+    pub fn connect_fd(&self, fd: RawFd, properties: Option<Properties>) -> Result<Core, Error> {
+        let properties = properties.map_or(ptr::null_mut(), |p| p.into_raw());
+
+        unsafe {
+            let core = pw_sys::pw_context_connect_fd(self.0, fd, properties, 0);
+            if core.is_null() {
                 Err(Error::CreationFailed)
             } else {
                 Ok(Core::from_ptr(core))
