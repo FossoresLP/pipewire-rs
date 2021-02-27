@@ -21,6 +21,8 @@ pub mod port;
 pub mod proxy;
 pub mod registry;
 pub use spa;
+pub mod constants;
+pub mod stream;
 pub mod types;
 mod utils;
 
@@ -28,6 +30,7 @@ mod utils;
 // can always "use pipewire::prelude::*" without getting conflicts
 pub mod prelude {
     pub use crate::loop_::Loop;
+    pub use crate::stream::ListenerBuilderT;
     pub use spa::prelude::*;
 }
 
