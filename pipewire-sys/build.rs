@@ -18,6 +18,7 @@ fn main() {
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+        .size_t_is_usize(true)
         .whitelist_function("pw_.*")
         .whitelist_type("pw_.*")
         .whitelist_var("pw_.*")
