@@ -1,4 +1,4 @@
-// Copyright 2020, Collabora Ltd.
+// Copyright The pipewire-rs Contributors.
 // SPDX-License-Identifier: MIT
 
 pub fn remove(elem: &spa_sys::spa_list) {

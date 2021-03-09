@@ -1,3 +1,6 @@
+// Copyright The pipewire-rs Contributors.
+// SPDX-License-Identifier: MIT
+
 use bitflags::bitflags;
 use std::{ffi::CStr, fmt, marker::PhantomData};
 

@@ -1,4 +1,4 @@
-// Copyright 2020, Collabora Ltd.
+// Copyright The pipewire-rs Contributors.
 // SPDX-License-Identifier: MIT
 
 // FIXME: remove 'ignore' to actually build doc test once 'pipewire' crate has been updated on crates.io
