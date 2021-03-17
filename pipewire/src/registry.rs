@@ -67,7 +67,7 @@ impl Drop for Registry {
 
 #[derive(Default)]
 struct ListenerLocalCallbacks {
-    global: Option<Box<dyn Fn(GlobalObject<ForeignDict>)>>,
+    global: Option<Box<dyn Fn(&GlobalObject<ForeignDict>)>>,
     global_remove: Option<Box<dyn Fn(u32)>>,
 }
 
@@ -95,7 +95,7 @@ impl<'a> ListenerLocalBuilder<'a> {
     #[must_use]
     pub fn global<F>(mut self, global: F) -> Self
     where
-        F: Fn(GlobalObject<ForeignDict>) + 'static,
+        F: Fn(&GlobalObject<ForeignDict>) + 'static,
     {
         self.cbs.global = Some(Box::new(global));
         self
@@ -123,7 +123,7 @@ impl<'a> ListenerLocalBuilder<'a> {
             let type_ = CStr::from_ptr(type_).to_str().unwrap();
             let obj = GlobalObject::new(id, permissions, type_, version, props);
             let callbacks = (data as *mut ListenerLocalCallbacks).as_ref().unwrap();
-            callbacks.global.as_ref().unwrap()(obj);
+            callbacks.global.as_ref().unwrap()(&obj);
         }
 
         unsafe extern "C" fn registry_events_global_remove(data: *mut c_void, id: u32) {
