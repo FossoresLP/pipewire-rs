@@ -10,9 +10,9 @@ use std::pin::Pin;
 use crate::{
     proxy::{Proxy, ProxyT},
     types::ObjectType,
-    Error,
+    Error, Properties,
 };
-use spa::dict::ForeignDict;
+use spa::dict::{ForeignDict, ReadableDict};
 
 #[derive(Debug)]
 pub struct Registry(*mut pw_sys::pw_registry);
@@ -31,7 +31,7 @@ impl Registry {
         }
     }
 
-    pub fn bind<T: ProxyT>(&self, object: &GlobalObject) -> Result<T, Error> {
+    pub fn bind<T: ProxyT, D: ReadableDict>(&self, object: &GlobalObject<D>) -> Result<T, Error> {
         let proxy = unsafe {
             let type_ = CString::new(object.type_.to_str()).unwrap();
             let version = object.type_.client_version();
@@ -67,7 +67,7 @@ impl Drop for Registry {
 
 #[derive(Default)]
 struct ListenerLocalCallbacks {
-    global: Option<Box<dyn Fn(GlobalObject)>>,
+    global: Option<Box<dyn Fn(GlobalObject<ForeignDict>)>>,
     global_remove: Option<Box<dyn Fn(u32)>>,
 }
 
@@ -95,7 +95,7 @@ impl<'a> ListenerLocalBuilder<'a> {
     #[must_use]
     pub fn global<F>(mut self, global: F) -> Self
     where
-        F: Fn(GlobalObject) + 'static,
+        F: Fn(GlobalObject<ForeignDict>) + 'static,
     {
         self.cbs.global = Some(Box::new(global));
         self
@@ -181,15 +181,15 @@ bitflags! {
 }
 
 #[derive(Debug)]
-pub struct GlobalObject {
+pub struct GlobalObject<D: ReadableDict> {
     pub id: u32,
     pub permissions: Permission,
     pub type_: ObjectType,
     pub version: u32,
-    pub props: Option<ForeignDict>,
+    pub props: Option<D>,
 }
 
-impl GlobalObject {
+impl GlobalObject<ForeignDict> {
     fn new(
         id: u32,
         permissions: u32,
@@ -211,6 +211,21 @@ impl GlobalObject {
             type_,
             version,
             props,
+        }
+    }
+}
+
+impl<D: ReadableDict> GlobalObject<D> {
+    pub fn to_owned(&self) -> GlobalObject<Properties> {
+        GlobalObject {
+            id: self.id,
+            permissions: self.permissions,
+            type_: self.type_.clone(),
+            version: self.version,
+            props: self
+                .props
+                .as_ref()
+                .map(|props| Properties::from_dict(props)),
         }
     }
 }
