@@ -101,6 +101,17 @@ impl Properties {
 
     // TODO: `fn from_string` that calls `pw_sys::pw_properties_new_string`
     // TODO: bindings for pw_properties_update_keys, pw_properties_update, pw_properties_add, pw_properties_add_keys
+
+    /// Create a new `Properties` from a given dictionary.
+    ///
+    /// All the keys and values from `dict` are copied.
+    pub fn from_dict<D: ReadableDict>(dict: &D) -> Self {
+        let ptr = dict.get_dict_ptr();
+        unsafe {
+            let copy = pw_sys::pw_properties_new_dict(ptr);
+            Self::from_ptr(copy)
+        }
+    }
 }
 
 impl ReadableDict for Properties {
@@ -144,6 +155,7 @@ impl Drop for Properties {
 
 #[cfg(test)]
 mod tests {
+    use super::Properties;
     use spa::dict::{ReadableDict, WritableDict};
 
     #[test]
@@ -192,5 +204,23 @@ mod tests {
 
         assert_eq!(None, props1.get("K1"));
         assert_eq!(Some("V1"), props2.get("K1"));
+    }
+
+    #[test]
+    fn from_dict() {
+        use spa::static_dict;
+
+        let mut props = {
+            let dict = static_dict! { "K0" => "V0" };
+
+            Properties::from_dict(&dict)
+        };
+
+        assert_eq!(props.len(), 1);
+        assert_eq!(props.get("K0"), Some("V0"));
+
+        props.insert("K1", "V1");
+        assert_eq!(props.len(), 2);
+        assert_eq!(props.get("K1"), Some("V1"));
     }
 }
