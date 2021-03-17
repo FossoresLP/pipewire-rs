@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 use bitflags::bitflags;
-use std::{ffi::CStr, fmt, marker::PhantomData};
+// re-exported as used in the static_dict! macro implementation
+pub use spa_sys::spa_dict_item;
+use std::{ffi::CStr, fmt, marker::PhantomData, ptr};
 
 pub trait ReadableDict {
     /// Obtain the pointer to the raw `spa_dict` struct.
@@ -207,9 +209,98 @@ impl<'a> Iterator for Values<'a> {
     }
 }
 
+/// A collection of static key/value pairs.
+///
+/// # Examples
+/// Create a `StaticDict` and access the stored values by key:
+/// ```rust
+/// use libspa::{ReadableDict, StaticDict, static_dict};
+///
+/// static DICT: StaticDict = static_dict!{
+///     "Key" => "Value",
+///     "OtherKey" => "OtherValue"
+/// };
+///
+/// assert_eq!(Some("Value"), DICT.get("Key"));
+/// assert_eq!(Some("OtherValue"), DICT.get("OtherKey"));
+/// ```
+pub struct StaticDict {
+    ptr: ptr::NonNull<spa_sys::spa_dict>,
+}
+
+impl StaticDict {
+    /// Create a [`StaticDict`] from an existing raw `spa_dict` pointer.
+    ///
+    /// # Safety
+    /// - The provided pointer must point to a valid, well-aligned `spa_dict` struct.
+    /// - The struct and its content need to stay alive during the whole lifetime of the `StaticDict`.
+    /// - The keys and values stored in this dict has to be static strings.
+    pub const unsafe fn from_ptr(ptr: ptr::NonNull<spa_sys::spa_dict>) -> Self {
+        Self { ptr }
+    }
+}
+
+/// A macro for creating a new [`StaticDict`] with predefined key-value pairs.
+///
+/// The macro accepts a list of static `Key => Value` pairs, seperated by commas.
+///
+/// # Examples:
+/// Create a `StaticDict`.
+/// ```rust
+/// use libspa::{StaticDict, static_dict};
+///
+/// static PROPS: StaticDict = static_dict!{
+///    "Key1" => "Value1",
+///    "Key2" => "Value2"
+/// };
+/// ```
+#[macro_export]
+macro_rules! static_dict {
+    {$($k:expr => $v:expr),+} => {{
+        use $crate::dict::{spa_dict_item, StaticDict, Flags};
+        use std::ptr;
+
+        const ITEMS: &[spa_dict_item] = &[
+            $(
+                spa_dict_item {
+                    key: concat!($k, "\0").as_ptr() as *const i8,
+                    value: concat!($v, "\0").as_ptr() as *const i8
+                },
+            )+
+        ];
+
+        const RAW: spa_sys::spa_dict = spa_sys::spa_dict {
+            flags: Flags::empty().bits(),
+            n_items: ITEMS.len() as u32,
+            items: ITEMS.as_ptr(),
+        };
+
+        unsafe {
+            let ptr = &RAW as *const _ as *mut _;
+            StaticDict::from_ptr(ptr::NonNull::new_unchecked(ptr))
+        }
+    }};
+}
+
+impl ReadableDict for StaticDict {
+    fn get_dict_ptr(&self) -> *const spa_sys::spa_dict {
+        self.ptr.as_ptr()
+    }
+}
+
+impl fmt::Debug for StaticDict {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // FIXME: Find a way to display flags too.
+        f.debug_map().entries(self.iter_cstr()).finish()
+    }
+}
+
+unsafe impl Send for StaticDict {}
+unsafe impl Sync for StaticDict {}
+
 #[cfg(test)]
 mod tests {
-    use super::{Flags, ForeignDict, ReadableDict};
+    use super::{Flags, ForeignDict, ReadableDict, StaticDict};
     use spa_sys::{spa_dict, spa_dict_item};
     use std::{ffi::CString, ptr};
 
@@ -331,5 +422,17 @@ mod tests {
         let dict = unsafe { ForeignDict::from_ptr(&raw) };
 
         assert_eq!(r#"{"K0": "V0"}"#, &format!("{:?}", dict))
+    }
+
+    #[test]
+    fn static_dict() {
+        static DICT: StaticDict = static_dict! {
+            "K0" => "V0",
+            "K1" => "V1"
+        };
+
+        assert_eq!(DICT.len(), 2);
+        assert_eq!(DICT.get("K0"), Some("V0"));
+        assert_eq!(DICT.get("K1"), Some("V1"));
     }
 }
