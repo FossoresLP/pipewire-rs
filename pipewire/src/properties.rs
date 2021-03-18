@@ -1,5 +1,5 @@
 use spa::dict::{ReadableDict, WritableDict};
-use std::{ffi::CString, mem::ManuallyDrop};
+use std::{ffi::CString, mem::ManuallyDrop, ptr};
 
 /// A collection of key/value pairs.
 ///
@@ -18,7 +18,7 @@ use std::{ffi::CString, mem::ManuallyDrop};
 /// assert_eq!(Some("OtherValue"), props.get("OtherKey"));
 /// ```
 pub struct Properties {
-    ptr: *mut pw_sys::pw_properties,
+    ptr: ptr::NonNull<pw_sys::pw_properties>,
 }
 
 /// A macro for creating a new `Properties` struct with predefined key-value pairs.
@@ -53,13 +53,13 @@ pub struct Properties {
 macro_rules! properties {
     {$($k:expr => $v:expr),+} => {{
         unsafe {
-            $crate::Properties::from_ptr(pw_sys::pw_properties_new(
+            $crate::Properties::from_ptr(std::ptr::NonNull::new_unchecked(pw_sys::pw_properties_new(
                 $(
                     std::ffi::CString::new($k).unwrap().as_ptr(),
                     std::ffi::CString::new($v).unwrap().as_ptr()
                 ),+,
                 std::ptr::null::<std::os::raw::c_char>()
-            )
+            ))
         )
         }
     }};
@@ -69,12 +69,10 @@ impl Properties {
     /// Create a `Properties` struct from an existing raw `pw_properties` pointer.
     ///
     /// # Safety
-    /// - The provided pointer must point to a valid, well-aligned `pw_properties` struct, and must not be `NULL`.
+    /// - The provided pointer must point to a valid, well-aligned `pw_properties` struct.
     /// - After this call, the generated `Properties` struct will assume ownership of the data pointed to,
     ///   so that data must not be freed elsewhere.
-    pub unsafe fn from_ptr(ptr: *mut pw_sys::pw_properties) -> Self {
-        debug_assert!(!ptr.is_null());
-
+    pub unsafe fn from_ptr(ptr: ptr::NonNull<pw_sys::pw_properties>) -> Self {
         Self { ptr }
     }
 
@@ -86,7 +84,7 @@ impl Properties {
     /// Ownership of the `pw_properties` struct is not transferred to the caller and must not be manually freed.
     /// If you want to take ownership, use [into_raw()](Self::into_raw()) instead.
     pub fn as_ptr(&self) -> *mut pw_sys::pw_properties {
-        self.ptr
+        self.ptr.as_ptr()
     }
 
     /// Consume the `Properties` struct, returning a pointer to the raw `pw_properties` struct.
@@ -96,7 +94,7 @@ impl Properties {
     pub fn into_raw(self) -> *mut pw_sys::pw_properties {
         let this = ManuallyDrop::new(self);
 
-        this.ptr
+        this.ptr.as_ptr()
     }
 
     // TODO: `fn from_string` that calls `pw_sys::pw_properties_new_string`
@@ -109,14 +107,14 @@ impl Properties {
         let ptr = dict.get_dict_ptr();
         unsafe {
             let copy = pw_sys::pw_properties_new_dict(ptr);
-            Self::from_ptr(copy)
+            Self::from_ptr(ptr::NonNull::new(copy).expect("pw_properties_new_dict() returned NULL"))
         }
     }
 }
 
 impl ReadableDict for Properties {
     fn get_dict_ptr(&self) -> *const spa_sys::spa_dict {
-        self.ptr as *const spa_sys::spa_dict
+        self.as_ptr().cast()
     }
 }
 
@@ -124,23 +122,24 @@ impl WritableDict for Properties {
     fn insert<T: Into<Vec<u8>>>(&mut self, key: T, value: T) {
         let k = CString::new(key).unwrap();
         let v = CString::new(value).unwrap();
-        unsafe { pw_sys::pw_properties_set(self.ptr, k.as_ptr(), v.as_ptr()) };
+        unsafe { pw_sys::pw_properties_set(self.as_ptr(), k.as_ptr(), v.as_ptr()) };
     }
 
     fn remove<T: Into<Vec<u8>>>(&mut self, key: T) {
         let key = CString::new(key).unwrap();
-        unsafe { pw_sys::pw_properties_set(self.ptr, key.as_ptr(), std::ptr::null()) };
+        unsafe { pw_sys::pw_properties_set(self.as_ptr(), key.as_ptr(), std::ptr::null()) };
     }
 
     fn clear(&mut self) {
-        unsafe { pw_sys::pw_properties_clear(self.ptr) }
+        unsafe { pw_sys::pw_properties_clear(self.as_ptr()) }
     }
 }
 
 impl Clone for Properties {
     fn clone(&self) -> Self {
         unsafe {
-            let ptr = pw_sys::pw_properties_copy(self.ptr);
+            let ptr = pw_sys::pw_properties_copy(self.as_ptr());
+            let ptr = ptr::NonNull::new_unchecked(ptr);
 
             Self { ptr }
         }
@@ -149,7 +148,7 @@ impl Clone for Properties {
 
 impl Drop for Properties {
     fn drop(&mut self) {
-        unsafe { pw_sys::pw_properties_free(self.ptr) }
+        unsafe { pw_sys::pw_properties_free(self.ptr.as_ptr()) }
     }
 }
 
