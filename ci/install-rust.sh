@@ -24,5 +24,12 @@ if [ "$RUST_VERSION" = "stable" ]; then
   cargo install --force --git https://github.com/kbknapp/cargo-outdated
 fi
 
+# Install miri which requires a specific version of nightly
+echo nightly-$(curl -s https://rust-lang.github.io/rustup-components-history/x86_64-unknown-linux-gnu/miri) > /nightly-version
+rustup default $(cat /nightly-version)
+rustup component add miri
+cargo miri setup
+rustup default stable
+
 # fetch project deps
 cargo fetch

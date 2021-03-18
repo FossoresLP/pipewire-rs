@@ -71,6 +71,8 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg_attr(miri, ignore)]
+    /* the errno crate is calling foreign function __xpg_strerror_r which is not supported by miri */
     fn spa_result() {
         assert!(!SpaResult::from_c(0).is_async());
         assert!(SpaResult::new_return_async(0).is_async());

@@ -21,7 +21,7 @@ include:
 .fedora:
   variables:
     # Update this tag when you want to trigger a rebuild
-    FDO_DISTRIBUTION_TAG: '2021-03-18.2'
+    FDO_DISTRIBUTION_TAG: '2021-03-19.0'
     FDO_DISTRIBUTION_VERSION: '33'
     # findutils: used by the .build script below
     # dbus-devel: required by pipewire
@@ -113,6 +113,19 @@ test-stable:
     - rustc --version
     - cargo build --all-targets
     - cargo test --color=always
+
+miri:
+  extends:
+    - .fedora
+    - .fdo.distribution-image@fedora
+    - .build
+  stage: test
+  script:
+    - rustup default $(cat /nightly-version)
+    - rustc --version
+    # miri does not support foreign function calls so we can't use it with code calling ffi.
+    # Run it only on libspa as this crate is mostly a pure Rust re-implementation.
+    - cargo miri test --package libspa
 
 rustdoc:
   extends:
