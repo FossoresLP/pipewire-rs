@@ -142,11 +142,9 @@ impl Core {
             )
         };
 
-        if !res.is_null() {
-            Proxy::new(res.cast()).downcast().map_err(|(_, e)| e)
-        } else {
-            Err(Error::CreationFailed)
-        }
+        let ptr = ptr::NonNull::new(res.cast()).ok_or(Error::CreationFailed)?;
+
+        Proxy::new(ptr).downcast().map_err(|(_, e)| e)
     }
 
     /// Destroy the object on the remote server represented by the provided proxy.

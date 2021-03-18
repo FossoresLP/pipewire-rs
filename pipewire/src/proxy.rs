@@ -2,23 +2,25 @@
 // SPDX-License-Identifier: MIT
 
 use libc::{c_char, c_void};
-use std::ffi::CStr;
 use std::fmt;
 use std::mem;
 use std::pin::Pin;
+use std::{ffi::CStr, ptr};
 
 use crate::{types::ObjectType, Error};
 
-pub struct Proxy(*mut pw_sys::pw_proxy);
+pub struct Proxy {
+    ptr: ptr::NonNull<pw_sys::pw_proxy>,
+}
 
 // Wrapper around a proxy pointer
 impl Proxy {
-    pub(crate) fn new(proxy: *mut pw_sys::pw_proxy) -> Self {
-        Proxy(proxy)
+    pub(crate) fn new(ptr: ptr::NonNull<pw_sys::pw_proxy>) -> Self {
+        Proxy { ptr }
     }
 
     pub(crate) fn as_ptr(&self) -> *mut pw_sys::pw_proxy {
-        self.0
+        self.ptr.as_ptr()
     }
 
     pub fn add_listener_local(&self) -> ProxyListenerLocalBuilder {
@@ -29,14 +31,14 @@ impl Proxy {
     }
 
     pub fn id(&self) -> u32 {
-        unsafe { pw_sys::pw_proxy_get_id(self.0) }
+        unsafe { pw_sys::pw_proxy_get_id(self.as_ptr()) }
     }
 
     /// Get the type of the proxy as well as it's version.
     pub fn get_type(&self) -> (ObjectType, u32) {
         unsafe {
             let mut version = 0;
-            let proxy_type = pw_sys::pw_proxy_get_type(self.0, &mut version);
+            let proxy_type = pw_sys::pw_proxy_get_type(self.as_ptr(), &mut version);
             let proxy_type = CStr::from_ptr(proxy_type);
 
             (
@@ -63,7 +65,7 @@ impl Proxy {
 impl Drop for Proxy {
     fn drop(&mut self) {
         unsafe {
-            pw_sys::pw_proxy_destroy(self.0);
+            pw_sys::pw_proxy_destroy(self.as_ptr());
         }
     }
 }

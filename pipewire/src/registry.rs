@@ -52,11 +52,9 @@ impl Registry {
             proxy
         };
 
-        if proxy.is_null() {
-            return Err(Error::NoMemory);
-        }
+        let proxy = ptr::NonNull::new(proxy.cast()).ok_or(Error::NoMemory)?;
 
-        Proxy::new(proxy.cast()).downcast().map_err(|(_, e)| e)
+        Proxy::new(proxy).downcast().map_err(|(_, e)| e)
     }
 }
 
