@@ -7,4 +7,4 @@ These bindings are providing a safe API that can be used to interface with
 
 ## Documentation
 
-See the [crate documentation](https://docs.rs/pipewire/).
+See the [crate documentation](https://pipewire.pages.freedesktop.org/pipewire-rs/pipewire/).
