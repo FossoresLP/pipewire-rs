@@ -1,6 +1,8 @@
 // Copyright The pipewire-rs Contributors.
 // SPDX-License-Identifier: MIT
 
+use std::ptr;
+
 use libc::{c_int, c_void};
 use signal::Signal;
 use spa::spa_interface_call_method;
@@ -50,8 +52,10 @@ pub trait Loop {
             (source, Box::from_raw(data))
         };
 
+        let ptr = ptr::NonNull::new(source).expect("source is NULL");
+
         Source {
-            source,
+            ptr,
             loop_: &self,
             data,
         }
@@ -76,7 +80,7 @@ pub trait Loop {
                 &mut iface as *mut spa_sys::spa_interface,
                 spa_sys::spa_loop_utils_methods,
                 destroy_source,
-                source.source
+                source.as_ptr()
             )
         }
     }
@@ -86,11 +90,21 @@ where
     F: Fn() + 'static,
     L: Loop,
 {
-    source: *mut spa_sys::spa_source,
+    ptr: ptr::NonNull<spa_sys::spa_source>,
     loop_: &'a L,
     // Store data wrapper to prevent leak
     #[allow(dead_code)]
     data: Box<F>,
+}
+
+impl<'a, F, L> Source<'a, F, L>
+where
+    F: Fn() + 'static,
+    L: Loop,
+{
+    fn as_ptr(&self) -> *mut spa_sys::spa_source {
+        self.ptr.as_ptr()
+    }
 }
 
 impl<'a, F, L> Drop for Source<'a, F, L>
