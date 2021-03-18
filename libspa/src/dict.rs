@@ -301,52 +301,8 @@ unsafe impl Sync for StaticDict {}
 #[cfg(test)]
 mod tests {
     use super::{Flags, ForeignDict, ReadableDict, StaticDict};
-    use spa_sys::{spa_dict, spa_dict_item};
+    use spa_sys::spa_dict;
     use std::{ffi::CString, ptr};
-
-    /// Create a raw dict with the specified number of key-value pairs.
-    ///
-    /// `num_items` must not be zero, or this function will panic.
-    ///
-    /// Each key value pair is `("K<n>", "V<n>")`, with *\<n\>* being an element of the range `0..num_items`.
-    ///
-    /// The function returns a tuple consisting of:
-    /// 1. An allocation (`Vec`) containing the raw Key and Value Strings.
-    /// 2. An allocation (`Vec`) containing all the items.
-    /// 3. The created `spa_dict` struct.
-    ///
-    /// The first two items must be kept alive for the entire lifetime of the returned `spa_dict` struct.
-    fn make_raw_dict(
-        num_items: u32,
-    ) -> (
-        Vec<(CString, CString)>,
-        Vec<spa_dict_item>,
-        spa_sys::spa_dict,
-    ) {
-        assert!(num_items != 0, "num_items must not be zero");
-
-        let mut strings: Vec<(CString, CString)> = Vec::with_capacity(num_items as usize);
-        let mut items: Vec<spa_dict_item> = Vec::with_capacity(num_items as usize);
-
-        for i in 0..num_items {
-            let k = CString::new(format!("K{}", i)).unwrap();
-            let v = CString::new(format!("V{}", i)).unwrap();
-            let item = spa_dict_item {
-                key: k.as_ptr(),
-                value: v.as_ptr(),
-            };
-            strings.push((k, v));
-            items.push(item);
-        }
-
-        let raw = spa_dict {
-            flags: Flags::empty().bits,
-            n_items: num_items,
-            items: items.as_ptr(),
-        };
-
-        (strings, items, raw)
-    }
 
     #[test]
     fn test_empty_dict() {
@@ -366,8 +322,10 @@ mod tests {
 
     #[test]
     fn test_iter_cstr() {
-        let (_strings, _items, raw) = make_raw_dict(2);
-        let dict = unsafe { ForeignDict::from_ptr(&raw) };
+        let dict = static_dict! {
+            "K0" => "V0",
+            "K1" => "V1"
+        };
 
         let mut iter = dict.iter_cstr();
         assert_eq!(
@@ -389,8 +347,10 @@ mod tests {
 
     #[test]
     fn test_iterators() {
-        let (_strings, _items, raw) = make_raw_dict(2);
-        let dict = unsafe { ForeignDict::from_ptr(&raw) };
+        let dict = static_dict! {
+            "K0" => "V0",
+            "K1" => "V1"
+        };
 
         let mut iter = dict.iter();
         assert_eq!(("K0", "V0"), iter.next().unwrap());
@@ -410,16 +370,18 @@ mod tests {
 
     #[test]
     fn test_get() {
-        let (_strings, _items, raw) = make_raw_dict(1);
-        let dict = unsafe { ForeignDict::from_ptr(&raw) };
+        let dict = static_dict! {
+            "K0" => "V0"
+        };
 
         assert_eq!(Some("V0"), dict.get("K0"));
     }
 
     #[test]
     fn test_debug() {
-        let (_strings, _items, raw) = make_raw_dict(1);
-        let dict = unsafe { ForeignDict::from_ptr(&raw) };
+        let dict = static_dict! {
+            "K0" => "V0"
+        };
 
         assert_eq!(r#"{"K0": "V0"}"#, &format!("{:?}", dict))
     }
