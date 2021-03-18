@@ -63,49 +63,49 @@ pub struct NodeListenerLocalBuilder<'a> {
 }
 
 pub struct NodeInfo {
-    ptr: *const pw_sys::pw_node_info,
+    ptr: ptr::NonNull<pw_sys::pw_node_info>,
     props: Option<ForeignDict>,
 }
 
 impl NodeInfo {
-    fn new(ptr: *const pw_sys::pw_node_info) -> Self {
-        let props_ptr = unsafe { (*ptr).props };
+    fn new(ptr: ptr::NonNull<pw_sys::pw_node_info>) -> Self {
+        let props_ptr = unsafe { ptr.as_ref().props };
         let props = ptr::NonNull::new(props_ptr).map(|ptr| unsafe { ForeignDict::from_ptr(ptr) });
 
         Self { ptr, props }
     }
 
     pub fn id(&self) -> u32 {
-        unsafe { (*self.ptr).id }
+        unsafe { self.ptr.as_ref().id }
     }
 
     pub fn max_input_ports(&self) -> u32 {
-        unsafe { (*self.ptr).max_input_ports }
+        unsafe { self.ptr.as_ref().max_input_ports }
     }
 
     pub fn max_output_ports(&self) -> u32 {
-        unsafe { (*self.ptr).max_output_ports }
+        unsafe { self.ptr.as_ref().max_output_ports }
     }
 
     pub fn change_mask(&self) -> NodeChangeMask {
-        let mask = unsafe { (*self.ptr).change_mask };
+        let mask = unsafe { self.ptr.as_ref().change_mask };
         NodeChangeMask::from_bits(mask).expect("invalid change_mask")
     }
 
     pub fn n_input_ports(&self) -> u32 {
-        unsafe { (*self.ptr).n_input_ports }
+        unsafe { self.ptr.as_ref().n_input_ports }
     }
 
     pub fn n_output_ports(&self) -> u32 {
-        unsafe { (*self.ptr).n_output_ports }
+        unsafe { self.ptr.as_ref().n_output_ports }
     }
 
     pub fn state(&self) -> NodeState {
-        let state = unsafe { (*self.ptr).state };
+        let state = unsafe { self.ptr.as_ref().state };
         match state {
             pw_sys::pw_node_state_PW_NODE_STATE_ERROR => {
                 let error = unsafe {
-                    let error = (*self.ptr).error;
+                    let error = self.ptr.as_ref().error;
                     CStr::from_ptr(error).to_str().unwrap()
                 };
                 NodeState::Error(error)
@@ -201,6 +201,7 @@ impl<'a> NodeListenerLocalBuilder<'a> {
             info: *const pw_sys::pw_node_info,
         ) {
             let callbacks = (data as *mut ListenerLocalCallbacks).as_ref().unwrap();
+            let info = ptr::NonNull::new(info as *mut _).expect("info is NULL");
             let info = NodeInfo::new(info);
             callbacks.info.as_ref().unwrap()(&info);
         }
