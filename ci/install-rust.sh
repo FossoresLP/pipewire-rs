@@ -23,3 +23,6 @@ if [ "$RUST_VERSION" = "stable" ]; then
   cargo install --force cargo-deny
   cargo install --force --git https://github.com/kbknapp/cargo-outdated
 fi
+
+# fetch project deps
+cargo fetch
