@@ -37,7 +37,7 @@ impl Deref for MainLoop {
 
 impl Loop for MainLoop {
     fn as_ptr(&self) -> *mut pw_sys::pw_loop {
-        unsafe { pw_sys::pw_main_loop_get_loop(self.inner.0) }
+        unsafe { pw_sys::pw_main_loop_get_loop(self.inner.as_ptr()) }
     }
 }
 
@@ -52,36 +52,40 @@ impl WeakMainLoop {
 }
 
 #[derive(Debug)]
-pub struct MainLoopInner(*mut pw_sys::pw_main_loop);
+pub struct MainLoopInner {
+    ptr: ptr::NonNull<pw_sys::pw_main_loop>,
+}
 
 impl MainLoopInner {
     // TODO: props argument
     pub fn new() -> Result<Self, Error> {
         unsafe {
             let l = pw_sys::pw_main_loop_new(ptr::null());
-            if l.is_null() {
-                Err(Error::CreationFailed)
-            } else {
-                Ok(MainLoopInner(l))
-            }
+            let ptr = ptr::NonNull::new(l).ok_or(Error::CreationFailed)?;
+
+            Ok(MainLoopInner { ptr })
         }
+    }
+
+    fn as_ptr(&self) -> *mut pw_sys::pw_main_loop {
+        self.ptr.as_ptr()
     }
 
     pub fn run(&self) {
         unsafe {
-            pw_sys::pw_main_loop_run(self.0);
+            pw_sys::pw_main_loop_run(self.as_ptr());
         }
     }
 
     pub fn quit(&self) {
         unsafe {
-            pw_sys::pw_main_loop_quit(self.0);
+            pw_sys::pw_main_loop_quit(self.as_ptr());
         }
     }
 }
 
 impl Drop for MainLoopInner {
     fn drop(&mut self) {
-        unsafe { pw_sys::pw_main_loop_destroy(self.0) }
+        unsafe { pw_sys::pw_main_loop_destroy(self.ptr.as_ptr()) }
     }
 }
