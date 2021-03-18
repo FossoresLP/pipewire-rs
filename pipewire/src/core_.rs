@@ -227,7 +227,7 @@ impl<'a> ListenerLocalBuilder<'a> {
             info: *const pw_sys::pw_core_info,
         ) {
             let callbacks = (data as *mut ListenerLocalCallbacks).as_ref().unwrap();
-            let info = Info::new(info);
+            let info = Info::new(ptr::NonNull::new(info as *mut _).expect("info is NULL"));
             callbacks.info.as_ref().unwrap()(&info);
         }
 
@@ -299,7 +299,7 @@ impl<'a> ListenerLocalBuilder<'a> {
 }
 
 pub struct Info {
-    ptr: *const pw_sys::pw_core_info,
+    ptr: ptr::NonNull<pw_sys::pw_core_info>,
     /// Can contain a Dict wrapping the raw spa_dict at (*ptr).props.
     ///
     /// Since it is our responsibility that it does not stay alive longer than the raw dict,
@@ -308,39 +308,47 @@ pub struct Info {
 }
 
 impl Info {
-    fn new(info: *const pw_sys::pw_core_info) -> Self {
-        let props_ptr = unsafe { (*info).props };
+    fn new(info: ptr::NonNull<pw_sys::pw_core_info>) -> Self {
+        let props_ptr = unsafe { info.as_ref().props };
         let props = ptr::NonNull::new(props_ptr).map(|ptr| unsafe { ForeignDict::from_ptr(ptr) });
 
         Self { ptr: info, props }
     }
 
     pub fn id(&self) -> u32 {
-        unsafe { (*self.ptr).id }
+        unsafe { self.ptr.as_ref().id }
     }
 
     pub fn cookie(&self) -> u32 {
-        unsafe { (*self.ptr).cookie }
+        unsafe { self.ptr.as_ref().cookie }
     }
 
     pub fn user_name(&self) -> &str {
-        unsafe { CStr::from_ptr((*self.ptr).user_name).to_str().unwrap() }
+        unsafe {
+            CStr::from_ptr(self.ptr.as_ref().user_name)
+                .to_str()
+                .unwrap()
+        }
     }
 
     pub fn host_name(&self) -> &str {
-        unsafe { CStr::from_ptr((*self.ptr).host_name).to_str().unwrap() }
+        unsafe {
+            CStr::from_ptr(self.ptr.as_ref().host_name)
+                .to_str()
+                .unwrap()
+        }
     }
 
     pub fn version(&self) -> &str {
-        unsafe { CStr::from_ptr((*self.ptr).version).to_str().unwrap() }
+        unsafe { CStr::from_ptr(self.ptr.as_ref().version).to_str().unwrap() }
     }
 
     pub fn name(&self) -> &str {
-        unsafe { CStr::from_ptr((*self.ptr).name).to_str().unwrap() }
+        unsafe { CStr::from_ptr(self.ptr.as_ref().name).to_str().unwrap() }
     }
 
     pub fn change_mask(&self) -> ChangeMask {
-        let mask = unsafe { (*self.ptr).change_mask };
+        let mask = unsafe { self.ptr.as_ref().change_mask };
         ChangeMask::from_bits(mask).expect("invalid change_mask")
     }
 
