@@ -93,7 +93,7 @@ impl<'a> LinkListenerLocalBuilder<'a> {
             info: *const pw_sys::pw_link_info,
         ) {
             let callbacks = (data as *mut ListenerLocalCallbacks).as_ref().unwrap();
-            let info = LinkInfo::new(info);
+            let info = LinkInfo::new(ptr::NonNull::new(info as *mut _).expect("info is NULL"));
             callbacks.info.as_ref().unwrap()(&info);
         }
 
@@ -135,43 +135,42 @@ impl<'a> LinkListenerLocalBuilder<'a> {
 }
 
 pub struct LinkInfo {
-    ptr: *const pw_sys::pw_link_info,
+    ptr: ptr::NonNull<pw_sys::pw_link_info>,
     props: Option<ForeignDict>,
 }
 
 impl LinkInfo {
-    fn new(ptr: *const pw_sys::pw_link_info) -> Self {
-        assert!(!ptr.is_null());
-        let props_ptr = unsafe { (*ptr).props };
+    fn new(ptr: ptr::NonNull<pw_sys::pw_link_info>) -> Self {
+        let props_ptr = unsafe { ptr.as_ref().props };
         let props = ptr::NonNull::new(props_ptr).map(|ptr| unsafe { ForeignDict::from_ptr(ptr) });
         Self { ptr, props }
     }
 
     pub fn id(&self) -> u32 {
-        unsafe { (*self.ptr).id }
+        unsafe { self.ptr.as_ref().id }
     }
 
     pub fn output_node_id(&self) -> u32 {
-        unsafe { (*self.ptr).output_node_id }
+        unsafe { self.ptr.as_ref().output_node_id }
     }
 
     pub fn output_port_id(&self) -> u32 {
-        unsafe { (*self.ptr).output_port_id }
+        unsafe { self.ptr.as_ref().output_port_id }
     }
 
     pub fn input_node_id(&self) -> u32 {
-        unsafe { (*self.ptr).input_node_id }
+        unsafe { self.ptr.as_ref().input_node_id }
     }
 
     pub fn input_port_id(&self) -> u32 {
-        unsafe { (*self.ptr).input_port_id }
+        unsafe { self.ptr.as_ref().input_port_id }
     }
 
     pub fn state(&self) -> LinkState {
-        let raw_state = unsafe { (*self.ptr).state };
+        let raw_state = unsafe { self.ptr.as_ref().state };
         match raw_state {
             pw_sys::pw_link_state_PW_LINK_STATE_ERROR => {
-                let error = unsafe { CStr::from_ptr((*self.ptr).error).to_str().unwrap() };
+                let error = unsafe { CStr::from_ptr(self.ptr.as_ref().error).to_str().unwrap() };
                 LinkState::Error(error)
             }
             pw_sys::pw_link_state_PW_LINK_STATE_UNLINKED => LinkState::Unlinked,
@@ -185,7 +184,7 @@ impl LinkInfo {
     }
 
     pub fn change_mask(&self) -> LinkChangeMask {
-        let mask = unsafe { (*self.ptr).change_mask };
+        let mask = unsafe { self.ptr.as_ref().change_mask };
         LinkChangeMask::from_bits(mask).expect("Invalid raw change_mask")
     }
 
