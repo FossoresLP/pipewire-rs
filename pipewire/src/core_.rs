@@ -17,11 +17,17 @@ use spa::{dict::ForeignDict, spa_interface_call_method};
 pub const PW_ID_CORE: u32 = pw_sys::PW_ID_CORE;
 
 #[derive(Debug)]
-pub struct Core(*mut pw_sys::pw_core);
+pub struct Core {
+    ptr: ptr::NonNull<pw_sys::pw_core>,
+}
 
 impl Core {
-    pub(crate) fn from_ptr(core: *mut pw_sys::pw_core) -> Self {
-        Core(core)
+    pub(crate) fn from_ptr(ptr: ptr::NonNull<pw_sys::pw_core>) -> Self {
+        Core { ptr }
+    }
+
+    fn as_ptr(&self) -> *mut pw_sys::pw_core {
+        self.ptr.as_ptr()
     }
 
     // TODO: add non-local version when we'll bind pw_thread_loop_start()
@@ -37,7 +43,7 @@ impl Core {
     pub fn get_registry(&self) -> Registry {
         let registry = unsafe {
             spa_interface_call_method!(
-                self.0,
+                self.as_ptr(),
                 pw_sys::pw_core_methods,
                 get_registry,
                 pw_sys::PW_VERSION_REGISTRY,
@@ -55,7 +61,13 @@ impl Core {
     */
     pub fn sync(&self, seq: i32) -> i32 {
         unsafe {
-            spa_interface_call_method!(self.0, pw_sys::pw_core_methods, sync, PW_ID_CORE, seq)
+            spa_interface_call_method!(
+                self.as_ptr(),
+                pw_sys::pw_core_methods,
+                sync,
+                PW_ID_CORE,
+                seq
+            )
         }
     }
 
@@ -119,7 +131,7 @@ impl Core {
 
         let res = unsafe {
             spa_interface_call_method!(
-                self.0,
+                self.as_ptr(),
                 pw_sys::pw_core_methods,
                 create_object,
                 factory_name.as_ptr(),
@@ -148,7 +160,7 @@ impl Core {
     pub fn destroy_object<P: ProxyT>(&self, proxy: P) -> i32 {
         unsafe {
             spa_interface_call_method!(
-                self.0,
+                self.as_ptr(),
                 pw_sys::pw_core_methods,
                 destroy,
                 proxy.upcast_ref().as_ptr() as *mut c_void
@@ -270,7 +282,7 @@ impl<'a> ListenerLocalBuilder<'a> {
         };
 
         let (listener, data) = unsafe {
-            let ptr = self.core.0;
+            let ptr = self.core.as_ptr();
             let data = Box::into_raw(Box::new(self.cbs));
             let mut listener: Pin<Box<spa_sys::spa_hook>> = Box::pin(mem::zeroed());
             // Have to cast from pw-sys namespaced type to the equivalent spa-sys type

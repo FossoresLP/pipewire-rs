@@ -29,12 +29,9 @@ impl<T: Loop + Clone> Context<T> {
 
         unsafe {
             let core = pw_sys::pw_context_connect(self.0, properties, 0);
-            if core.is_null() {
-                // TODO: check errno to set better error
-                Err(Error::CreationFailed)
-            } else {
-                Ok(Core::from_ptr(core))
-            }
+            let ptr = ptr::NonNull::new(core).ok_or(Error::CreationFailed)?;
+
+            Ok(Core::from_ptr(ptr))
         }
     }
 
@@ -43,11 +40,9 @@ impl<T: Loop + Clone> Context<T> {
 
         unsafe {
             let core = pw_sys::pw_context_connect_fd(self.0, fd, properties, 0);
-            if core.is_null() {
-                Err(Error::CreationFailed)
-            } else {
-                Ok(Core::from_ptr(core))
-            }
+            let ptr = ptr::NonNull::new(core).ok_or(Error::CreationFailed)?;
+
+            Ok(Core::from_ptr(ptr))
         }
     }
 }
