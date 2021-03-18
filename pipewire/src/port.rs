@@ -68,24 +68,24 @@ pub enum Direction {
 }
 
 pub struct PortInfo {
-    ptr: *const pw_sys::pw_port_info,
+    ptr: ptr::NonNull<pw_sys::pw_port_info>,
     props: Option<ForeignDict>,
 }
 
 impl PortInfo {
-    fn new(ptr: *const pw_sys::pw_port_info) -> Self {
-        let props_ptr = unsafe { (*ptr).props };
+    fn new(ptr: ptr::NonNull<pw_sys::pw_port_info>) -> Self {
+        let props_ptr = unsafe { ptr.as_ref().props };
         let props = ptr::NonNull::new(props_ptr).map(|ptr| unsafe { ForeignDict::from_ptr(ptr) });
 
         Self { ptr, props }
     }
 
     pub fn id(&self) -> u32 {
-        unsafe { (*self.ptr).id }
+        unsafe { self.ptr.as_ref().id }
     }
 
     pub fn direction(&self) -> Direction {
-        let direction = unsafe { (*self.ptr).direction };
+        let direction = unsafe { self.ptr.as_ref().direction };
 
         match direction {
             spa_sys::spa_direction_SPA_DIRECTION_INPUT => Direction::Input,
@@ -95,7 +95,7 @@ impl PortInfo {
     }
 
     pub fn change_mask(&self) -> PortChangeMask {
-        let mask = unsafe { (*self.ptr).change_mask };
+        let mask = unsafe { self.ptr.as_ref().change_mask };
         PortChangeMask::from_bits(mask).expect("invalid change_mask")
     }
 
@@ -166,6 +166,7 @@ impl<'a> PortListenerLocalBuilder<'a> {
             info: *const pw_sys::pw_port_info,
         ) {
             let callbacks = (data as *mut ListenerLocalCallbacks).as_ref().unwrap();
+            let info = ptr::NonNull::new(info as *mut _).expect("info is NULL");
             let info = PortInfo::new(info);
             callbacks.info.as_ref().unwrap()(&info);
         }
