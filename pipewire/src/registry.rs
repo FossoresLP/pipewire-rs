@@ -3,9 +3,12 @@
 
 use bitflags::bitflags;
 use libc::{c_char, c_void};
-use std::ffi::{CStr, CString};
 use std::mem;
 use std::pin::Pin;
+use std::{
+    ffi::{CStr, CString},
+    ptr,
+};
 
 use crate::{
     proxy::{Proxy, ProxyT},
@@ -199,11 +202,8 @@ impl GlobalObject<ForeignDict> {
     ) -> Self {
         let type_ = ObjectType::from_str(type_);
         let permissions = Permission::from_bits(permissions).expect("invalid permissions");
-        let props = if props.is_null() {
-            None
-        } else {
-            Some(unsafe { ForeignDict::from_ptr(props) })
-        };
+        let props = props as *mut _;
+        let props = ptr::NonNull::new(props).map(|ptr| unsafe { ForeignDict::from_ptr(ptr) });
 
         Self {
             id,

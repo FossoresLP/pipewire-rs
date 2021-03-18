@@ -5,7 +5,7 @@ use bitflags::bitflags;
 use libc::{c_char, c_void};
 use std::ffi::{CStr, CString};
 use std::pin::Pin;
-use std::{fmt, mem};
+use std::{fmt, mem, ptr};
 
 use crate::{
     proxy::{Proxy, ProxyT},
@@ -310,14 +310,9 @@ pub struct Info {
 impl Info {
     fn new(info: *const pw_sys::pw_core_info) -> Self {
         let props_ptr = unsafe { (*info).props };
-        Self {
-            ptr: info,
-            props: if props_ptr.is_null() {
-                None
-            } else {
-                Some(unsafe { ForeignDict::from_ptr(props_ptr) })
-            },
-        }
+        let props = ptr::NonNull::new(props_ptr).map(|ptr| unsafe { ForeignDict::from_ptr(ptr) });
+
+        Self { ptr: info, props }
     }
 
     pub fn id(&self) -> u32 {

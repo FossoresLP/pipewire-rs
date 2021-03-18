@@ -3,8 +3,8 @@
 
 use bitflags::bitflags;
 use libc::c_void;
-use std::ffi::CStr;
 use std::pin::Pin;
+use std::{ffi::CStr, ptr};
 use std::{fmt, mem};
 
 use crate::{
@@ -70,14 +70,9 @@ pub struct NodeInfo {
 impl NodeInfo {
     fn new(ptr: *const pw_sys::pw_node_info) -> Self {
         let props_ptr = unsafe { (*ptr).props };
-        Self {
-            ptr,
-            props: if props_ptr.is_null() {
-                None
-            } else {
-                Some(unsafe { ForeignDict::from_ptr(props_ptr) })
-            },
-        }
+        let props = ptr::NonNull::new(props_ptr).map(|ptr| unsafe { ForeignDict::from_ptr(ptr) });
+
+        Self { ptr, props }
     }
 
     pub fn id(&self) -> u32 {

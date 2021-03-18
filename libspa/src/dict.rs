@@ -94,30 +94,27 @@ pub trait WritableDict {
 
 /// A wrapper for a `*const spa_dict` struct that does not take ownership of the data,
 /// useful for dicts shared to us via FFI.
-pub struct ForeignDict(*const spa_sys::spa_dict);
+pub struct ForeignDict {
+    ptr: ptr::NonNull<spa_sys::spa_dict>,
+}
 
 impl ForeignDict {
     /// Wraps the provided pointer in a read-only `ForeignDict` struct without taking ownership of the struct pointed to.
     ///
     /// # Safety
     ///
-    /// - The provided pointer must point to a valid, well-aligned `spa_dict` struct, and must not be `NULL`.
+    /// - The provided pointer must point to a valid, well-aligned `spa_dict` struct.
     /// - The struct pointed to must be kept valid for the entire lifetime of the created `Dict`.
     ///
     /// Violating any of these rules will result in undefined behaviour.
-    pub unsafe fn from_ptr(dict: *const spa_sys::spa_dict) -> Self {
-        debug_assert!(
-            !dict.is_null(),
-            "Dict must not be created from a pointer that is NULL"
-        );
-
-        Self(dict)
+    pub unsafe fn from_ptr(ptr: ptr::NonNull<spa_sys::spa_dict>) -> Self {
+        Self { ptr }
     }
 }
 
 impl ReadableDict for ForeignDict {
     fn get_dict_ptr(&self) -> *const spa_sys::spa_dict {
-        self.0
+        self.ptr.as_ptr()
     }
 }
 
@@ -318,7 +315,7 @@ mod tests {
             items: ptr::null(),
         };
 
-        let dict = unsafe { ForeignDict::from_ptr(&raw) };
+        let dict = unsafe { ForeignDict::from_ptr(ptr::NonNull::from(&raw)) };
         let iter = dict.iter_cstr();
 
         assert_eq!(0, dict.len());

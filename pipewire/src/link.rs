@@ -2,6 +2,7 @@ use std::{
     ffi::{c_void, CStr},
     fmt, mem,
     pin::Pin,
+    ptr,
 };
 
 use bitflags::bitflags;
@@ -142,14 +143,8 @@ impl LinkInfo {
     fn new(ptr: *const pw_sys::pw_link_info) -> Self {
         assert!(!ptr.is_null());
         let props_ptr = unsafe { (*ptr).props };
-        Self {
-            ptr,
-            props: if props_ptr.is_null() {
-                None
-            } else {
-                Some(unsafe { ForeignDict::from_ptr(props_ptr) })
-            },
-        }
+        let props = ptr::NonNull::new(props_ptr).map(|ptr| unsafe { ForeignDict::from_ptr(ptr) });
+        Self { ptr, props }
     }
 
     pub fn id(&self) -> u32 {

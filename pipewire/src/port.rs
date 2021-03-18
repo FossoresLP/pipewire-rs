@@ -3,8 +3,8 @@
 
 use bitflags::bitflags;
 use libc::c_void;
-use std::pin::Pin;
 use std::{fmt, mem};
+use std::{pin::Pin, ptr};
 
 use crate::{
     proxy::{Listener, Proxy, ProxyT},
@@ -75,14 +75,9 @@ pub struct PortInfo {
 impl PortInfo {
     fn new(ptr: *const pw_sys::pw_port_info) -> Self {
         let props_ptr = unsafe { (*ptr).props };
-        Self {
-            ptr,
-            props: if props_ptr.is_null() {
-                None
-            } else {
-                Some(unsafe { ForeignDict::from_ptr(props_ptr) })
-            },
-        }
+        let props = ptr::NonNull::new(props_ptr).map(|ptr| unsafe { ForeignDict::from_ptr(ptr) });
+
+        Self { ptr, props }
     }
 
     pub fn id(&self) -> u32 {
