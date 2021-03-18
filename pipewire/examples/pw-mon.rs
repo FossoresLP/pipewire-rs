@@ -97,7 +97,7 @@ fn monitor(remote: Option<String>) -> Result<()> {
         })
         .register();
 
-    let registry = Arc::new(core.get_registry());
+    let registry = Arc::new(core.get_registry()?);
     let registry_weak = Arc::downgrade(&registry);
 
     // Proxies and their listeners need to stay alive so store them here

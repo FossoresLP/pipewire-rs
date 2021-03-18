@@ -13,7 +13,7 @@ fn main() {
     let core = context
         .connect(None)
         .expect("Failed to connect to Pipewire Core");
-    let registry = core.get_registry();
+    let registry = core.get_registry().expect("Failed to get Registry");
 
     // Setup a registry listener that will obtain the name of a link factory and write it into `factory`.
     let factory: Rc<OnceCell<String>> = Rc::new(OnceCell::new());

@@ -39,8 +39,7 @@ impl Core {
         }
     }
 
-    #[must_use]
-    pub fn get_registry(&self) -> Registry {
+    pub fn get_registry(&self) -> Result<Registry, Error> {
         let registry = unsafe {
             spa_interface_call_method!(
                 self.as_ptr(),
@@ -50,8 +49,9 @@ impl Core {
                 0
             )
         };
+        let registry = ptr::NonNull::new(registry).ok_or(Error::CreationFailed)?;
 
-        Registry::new(registry)
+        Ok(Registry::new(registry))
     }
 
     /* FIXME: Return type is a SPA Result as seen here:

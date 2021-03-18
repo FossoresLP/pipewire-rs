@@ -18,11 +18,17 @@ use crate::{
 use spa::dict::{ForeignDict, ReadableDict};
 
 #[derive(Debug)]
-pub struct Registry(*mut pw_sys::pw_registry);
+pub struct Registry {
+    ptr: ptr::NonNull<pw_sys::pw_registry>,
+}
 
 impl Registry {
-    pub(crate) fn new(registry: *mut pw_sys::pw_registry) -> Self {
-        Registry(registry)
+    pub(crate) fn new(ptr: ptr::NonNull<pw_sys::pw_registry>) -> Self {
+        Registry { ptr }
+    }
+
+    fn as_ptr(&self) -> *mut pw_sys::pw_registry {
+        self.ptr.as_ptr()
     }
 
     // TODO: add non-local version when we'll bind pw_thread_loop_start()
@@ -40,7 +46,7 @@ impl Registry {
             let version = object.type_.client_version();
 
             let proxy = spa::spa_interface_call_method!(
-                self.0,
+                self.as_ptr(),
                 pw_sys::pw_registry_methods,
                 bind,
                 object.id,
@@ -61,7 +67,7 @@ impl Registry {
 impl Drop for Registry {
     fn drop(&mut self) {
         unsafe {
-            pw_sys::pw_proxy_destroy(self.0.cast());
+            pw_sys::pw_proxy_destroy(self.as_ptr().cast());
         }
     }
 }
@@ -147,7 +153,7 @@ impl<'a> ListenerLocalBuilder<'a> {
         };
 
         let (listener, data) = unsafe {
-            let ptr = self.registry.0;
+            let ptr = self.registry.as_ptr();
             let data = Box::into_raw(Box::new(self.cbs));
             let mut listener: Pin<Box<spa_sys::spa_hook>> = Box::pin(mem::zeroed());
             let listener_ptr: *mut spa_sys::spa_hook = listener.as_mut().get_unchecked_mut();
