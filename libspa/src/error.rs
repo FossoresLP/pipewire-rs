@@ -10,7 +10,7 @@ pub struct SpaResult(i32);
 
 #[derive(Debug, PartialEq)]
 pub enum SpaSuccess {
-    Sync,
+    Sync(i32),
     Async(i32),
 }
 
@@ -42,7 +42,7 @@ impl SpaResult {
         } else if self.is_async() {
             Ok(SpaSuccess::Async(async_seq(self.0)))
         } else {
-            Ok(SpaSuccess::Sync)
+            Ok(SpaSuccess::Sync(self.0))
         }
     }
 }
@@ -77,8 +77,8 @@ mod tests {
         assert!(!SpaResult::from_c(0).is_async());
         assert!(SpaResult::new_return_async(0).is_async());
 
-        assert_eq!(SpaResult::from_c(0).into_result(), Ok(SpaSuccess::Sync));
-        assert_eq!(SpaResult::from_c(1).into_result(), Ok(SpaSuccess::Sync));
+        assert_eq!(SpaResult::from_c(0).into_result(), Ok(SpaSuccess::Sync(0)));
+        assert_eq!(SpaResult::from_c(1).into_result(), Ok(SpaSuccess::Sync(1)));
         assert_eq!(
             SpaResult::new_return_async(1).into_result(),
             Ok(SpaSuccess::Async(1))
