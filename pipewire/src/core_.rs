@@ -12,7 +12,7 @@ use crate::{
     registry::Registry,
     Error,
 };
-use spa::{dict::ForeignDict, spa_interface_call_method};
+use spa::{dict::ForeignDict, result::SpaResult, spa_interface_call_method, AsyncSeq};
 
 pub const PW_ID_CORE: u32 = pw_sys::PW_ID_CORE;
 
@@ -54,13 +54,8 @@ impl Core {
         Ok(Registry::new(registry))
     }
 
-    /* FIXME: Return type is a SPA Result as seen here:
-       https://gitlab.freedesktop.org/pipewire/pipewire/-/blob/master/doc/spa/design.md#error-codes.
-       A type that represents this more idomatically should be returned.
-       See also: https://gitlab.freedesktop.org/pipewire/pipewire-rs/-/merge_requests/9#note_689093
-    */
-    pub fn sync(&self, seq: i32) -> i32 {
-        unsafe {
+    pub fn sync(&self, seq: i32) -> Result<AsyncSeq, Error> {
+        let res = unsafe {
             spa_interface_call_method!(
                 self.as_ptr(),
                 pw_sys::pw_core_methods,
@@ -68,7 +63,10 @@ impl Core {
                 PW_ID_CORE,
                 seq
             )
-        }
+        };
+
+        let res = SpaResult::from_c(res).into_async_result()?;
+        Ok(res)
     }
 
     /// Create a new object on the PipeWire server from a factory.
@@ -150,27 +148,25 @@ impl Core {
     /// Destroy the object on the remote server represented by the provided proxy.
     ///
     /// The proxy will be destroyed alongside the server side ressource, as it is no longer needed.
-    /* FIXME: Return type is a SPA Result as seen here:
-       https://gitlab.freedesktop.org/pipewire/pipewire/-/blob/master/doc/spa/design.md#error-codes.
-       A type that represents this more idomatically should be returned.
-       See also: https://gitlab.freedesktop.org/pipewire/pipewire-rs/-/merge_requests/9#note_689093
-    */
-    pub fn destroy_object<P: ProxyT>(&self, proxy: P) -> i32 {
-        unsafe {
+    pub fn destroy_object<P: ProxyT>(&self, proxy: P) -> Result<AsyncSeq, Error> {
+        let res = unsafe {
             spa_interface_call_method!(
                 self.as_ptr(),
                 pw_sys::pw_core_methods,
                 destroy,
                 proxy.upcast_ref().as_ptr() as *mut c_void
             )
-        }
+        };
+
+        let res = SpaResult::from_c(res).into_async_result()?;
+        Ok(res)
     }
 }
 
 #[derive(Default)]
 struct ListenerLocalCallbacks {
     info: Option<Box<dyn Fn(&Info)>>,
-    done: Option<Box<dyn Fn(u32, i32)>>,
+    done: Option<Box<dyn Fn(u32, AsyncSeq)>>,
     #[allow(clippy::type_complexity)]
     error: Option<Box<dyn Fn(u32, i32, i32, &str)>>, // TODO: return a proper Error enum?
                                                      // TODO: ping, remove_id, bound_id, add_mem, remove_mem
@@ -215,7 +211,7 @@ impl<'a> ListenerLocalBuilder<'a> {
     #[must_use]
     pub fn done<F>(mut self, done: F) -> Self
     where
-        F: Fn(u32, i32) + 'static,
+        F: Fn(u32, AsyncSeq) + 'static,
     {
         self.cbs.done = Some(Box::new(done));
         self
@@ -242,12 +238,8 @@ impl<'a> ListenerLocalBuilder<'a> {
         }
 
         unsafe extern "C" fn core_events_done(data: *mut c_void, id: u32, seq: i32) {
-            /* FIXME: Exposing the seq number for the user to check themselves makes the library more "low level"
-               than it perhaps could be.
-               See https://gitlab.freedesktop.org/pipewire/pipewire-rs/-/merge_requests/9#note_689093
-            */
             let callbacks = (data as *mut ListenerLocalCallbacks).as_ref().unwrap();
-            callbacks.done.as_ref().unwrap()(id, seq);
+            callbacks.done.as_ref().unwrap()(id, AsyncSeq::from_raw(seq));
         }
 
         unsafe extern "C" fn core_events_error(

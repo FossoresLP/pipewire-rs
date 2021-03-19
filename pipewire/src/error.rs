@@ -10,4 +10,6 @@ pub enum Error {
     NoMemory,
     #[error("Wrong proxy type")]
     WrongProxyType,
+    #[error(transparent)]
+    SpaError(#[from] spa::Error),
 }

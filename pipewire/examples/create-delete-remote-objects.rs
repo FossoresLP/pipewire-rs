@@ -62,7 +62,7 @@ fn main() {
     do_roundtrip(&mainloop, &core);
 
     // We have our object, now manually destroy it on the remote again.
-    core.destroy_object(link);
+    core.destroy_object(link).expect("destroy object failed");
 
     // Do a final roundtrip to destroy the link on the server side again.
     do_roundtrip(&mainloop, &core);
@@ -77,7 +77,7 @@ fn do_roundtrip(mainloop: &pw::MainLoop, core: &pw::Core) {
 
     // Trigger the sync event. The server's answer won't be processed until we start the main loop,
     // so we can safely do this before setting up a callback. This lets us avoid using a Cell.
-    let pending = core.sync(0);
+    let pending = core.sync(0).expect("sync failed");
 
     let _listener_core = core
         .add_listener_local()
