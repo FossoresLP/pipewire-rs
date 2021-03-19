@@ -14,9 +14,15 @@ pub trait ReadableDict {
     /// The iterator element type is `(&CStr, &CStr)`.
     fn iter_cstr(&self) -> CIter {
         let first_elem_ptr = unsafe { (*self.get_dict_ptr()).items };
+        let end = if first_elem_ptr.is_null() {
+            ptr::null()
+        } else {
+            unsafe { first_elem_ptr.offset((*self.get_dict_ptr()).n_items as isize) }
+        };
+
         CIter {
             next: first_elem_ptr,
-            end: unsafe { first_elem_ptr.offset((*self.get_dict_ptr()).n_items as isize) },
+            end,
             _phantom: PhantomData,
         }
     }
@@ -132,7 +138,7 @@ bitflags! {
 
 pub struct CIter<'a> {
     next: *const spa_sys::spa_dict_item,
-    /// Points to the first element outside of the allocated area.
+    /// Points to the first element outside of the allocated area, or null for empty dicts
     end: *const spa_sys::spa_dict_item,
     _phantom: PhantomData<&'a str>,
 }
