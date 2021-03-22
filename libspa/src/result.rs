@@ -1,21 +1,29 @@
 // Copyright The pipewire-rs Contributors.
 // SPDX-License-Identifier: MIT
 
+//! SPA results and errors.
+
 use std::{convert::TryInto, fmt};
 
 use errno::Errno;
 
+/// A result returned by a SPA method, usually to be converted to
+/// a Rust result using [`SpaResult::into_result`] or [`SpaResult::into_async_result`].
 #[derive(Debug, PartialEq)]
 pub struct SpaResult(i32);
 
 /// An asynchronous sequence number returned by a SPA component.
+///
 /// Use [`AsyncSeq::seq`] to retrive the actual sequence number.
 #[derive(PartialEq, Copy, Clone)]
 pub struct AsyncSeq(i32);
 
+/// A successful result from a SPA method.
 #[derive(Debug, PartialEq)]
 pub enum SpaSuccess {
+    /// Synchronous success
     Sync(i32),
+    /// Asynchronous success
     Async(AsyncSeq),
 }
 
@@ -62,6 +70,7 @@ impl fmt::Debug for AsyncSeq {
 }
 
 impl SpaResult {
+    /// Create a new [`SpaResult`] from an `i32` returned by C SPA method.
     pub fn from_c(res: i32) -> Self {
         Self(res)
     }
@@ -76,6 +85,7 @@ impl SpaResult {
         is_async(self.0)
     }
 
+    /// Convert a [`SpaResult`] into a [`Result`]
     pub fn into_result(self) -> Result<SpaSuccess, Error> {
         if self.0 < 0 {
             Err(Error::new(-self.0))
@@ -87,6 +97,9 @@ impl SpaResult {
     }
 
     /// Convert a [`SpaResult`] into either an [`AsyncSeq`] or an [`Error`].
+    ///
+    /// # Panics
+    ///
     /// This method will panic if the result is a synchronous success.
     pub fn into_async_result(self) -> Result<AsyncSeq, Error> {
         let res = self.into_result()?;
@@ -98,6 +111,7 @@ impl SpaResult {
     }
 }
 
+/// Error returned from a SPA method.
 #[derive(Debug, PartialEq)]
 pub struct Error(Errno);
 
