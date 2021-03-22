@@ -17,3 +17,7 @@ spa_sys = { package = "libspa-sys", version = "0", path = "../libspa-sys" }
 bitflags = "1.2"
 libc = "0.2"
 errno = "0.2"
+
+[dev-dependencies]
+pipewire-sys = { version = "0", path = "../pipewire-sys" }
+pipewire = { version = "0", path = "../pipewire" }
