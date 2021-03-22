@@ -1,6 +1,8 @@
 // Copyright The pipewire-rs Contributors.
 // SPDX-License-Identifier: MIT
 
+//! SPA interface.
+
 /// Call a method on a spa_interface.
 ///
 /// This needs to be called from within an `unsafe` block.
