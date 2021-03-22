@@ -118,10 +118,29 @@ impl ReadableDict for ForeignDict {
     }
 }
 
+fn dict_debug<T>(dict: &T, name: &str, f: &mut fmt::Formatter<'_>) -> fmt::Result
+where
+    T: ReadableDict,
+{
+    struct Entries<'a>(CIter<'a>);
+
+    impl<'a> fmt::Debug for Entries<'a> {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_map()
+                .entries(self.0.clone().map(|(k, v)| (k, v)))
+                .finish()
+        }
+    }
+
+    f.debug_struct(name)
+        .field("flags", &dict.flags())
+        .field("entries", &Entries(dict.iter_cstr()))
+        .finish()
+}
+
 impl fmt::Debug for ForeignDict {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // FIXME: Find a way to display flags too.
-        f.debug_map().entries(self.iter_cstr()).finish()
+        dict_debug(self, "ForeignDict", f)
     }
 }
 
@@ -133,6 +152,7 @@ bitflags! {
     }
 }
 
+#[derive(Clone)]
 pub struct CIter<'a> {
     next: *const spa_sys::spa_dict_item,
     /// Points to the first element outside of the allocated area, or null for empty dicts
@@ -293,8 +313,7 @@ impl ReadableDict for StaticDict {
 
 impl fmt::Debug for StaticDict {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // FIXME: Find a way to display flags too.
-        f.debug_map().entries(self.iter_cstr()).finish()
+        dict_debug(self, "StaticDict", f)
     }
 }
 
@@ -386,7 +405,23 @@ mod tests {
             "K0" => "V0"
         };
 
-        assert_eq!(r#"{"K0": "V0"}"#, &format!("{:?}", dict))
+        assert_eq!(
+            r#"StaticDict { flags: (empty), entries: {"K0": "V0"} }"#,
+            &format!("{:?}", dict)
+        );
+
+        let raw = spa_dict {
+            flags: Flags::SORTED.bits,
+            n_items: 0,
+            items: ptr::null(),
+        };
+
+        let dict = unsafe { ForeignDict::from_ptr(ptr::NonNull::from(&raw)) };
+
+        assert_eq!(
+            r#"ForeignDict { flags: SORTED, entries: {} }"#,
+            &format!("{:?}", dict)
+        );
     }
 
     #[test]
