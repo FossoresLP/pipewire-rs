@@ -1,11 +1,14 @@
 // Copyright The pipewire-rs Contributors.
 // SPDX-License-Identifier: MIT
 
+//! Dictionary types and traits.
+
 use bitflags::bitflags;
 // re-exported as used in the static_dict! macro implementation
 pub use spa_sys::spa_dict_item;
 use std::{ffi::CStr, fmt, marker::PhantomData, ptr};
 
+/// Trait providing API to read dictionaries.
 pub trait ReadableDict {
     /// Obtain the pointer to the raw `spa_dict` struct.
     fn get_dict_ptr(&self) -> *const spa_sys::spa_dict;
@@ -81,6 +84,7 @@ pub trait ReadableDict {
     }
 }
 
+/// Trait providing API to modify dictionaries.
 pub trait WritableDict {
     /// Insert the key-value pair, overwriting any old value.
     fn insert<T: Into<Vec<u8>>>(&mut self, key: T, value: T);
@@ -145,13 +149,16 @@ impl fmt::Debug for ForeignDict {
 }
 
 bitflags! {
+    /// Dictionary flags
     pub struct Flags: u32 {
         // These flags are redefinitions from
         // https://gitlab.freedesktop.org/pipewire/pipewire/-/blob/master/spa/include/spa/utils/dict.h
+        /// Dictionary has been sorted.
         const SORTED = spa_sys::SPA_DICT_FLAG_SORTED;
     }
 }
 
+/// Iterator on a dictionary's keys and values exposed as [`CStr`].
 #[derive(Clone)]
 pub struct CIter<'a> {
     next: *const spa_sys::spa_dict_item,
@@ -182,6 +189,7 @@ impl<'a> Iterator for CIter<'a> {
     }
 }
 
+/// Iterator on a dictionary's keys and values exposed as [`str`].
 pub struct Iter<'a> {
     inner: CIter<'a>,
 }
@@ -200,6 +208,7 @@ impl<'a> Iterator for Iter<'a> {
     }
 }
 
+/// Iterator on a dictionary's values.
 pub struct Keys<'a> {
     inner: CIter<'a>,
 }
@@ -216,6 +225,7 @@ impl<'a> Iterator for Keys<'a> {
     }
 }
 
+/// Iterator on a dictionary's values.
 pub struct Values<'a> {
     inner: CIter<'a>,
 }
