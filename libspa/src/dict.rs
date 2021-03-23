@@ -120,6 +120,25 @@ pub trait ReadableDict {
                 }),
             })
     }
+
+    #[doc(hidden)]
+    /// [`Debug`] implementation, should not be used directly by users.
+    fn debug(&self, name: &str, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        struct Entries<'a>(CIter<'a>);
+
+        impl<'a> fmt::Debug for Entries<'a> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.debug_map()
+                    .entries(self.0.clone().map(|(k, v)| (k, v)))
+                    .finish()
+            }
+        }
+
+        f.debug_struct(name)
+            .field("flags", &self.flags())
+            .field("entries", &Entries(self.iter_cstr()))
+            .finish()
+    }
 }
 
 /// An error raised by [`ReadableDict::parse`] if the value cannot be converted to the requested type.
@@ -235,29 +254,9 @@ impl ReadableDict for ForeignDict {
     }
 }
 
-fn dict_debug<T>(dict: &T, name: &str, f: &mut fmt::Formatter<'_>) -> fmt::Result
-where
-    T: ReadableDict,
-{
-    struct Entries<'a>(CIter<'a>);
-
-    impl<'a> fmt::Debug for Entries<'a> {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            f.debug_map()
-                .entries(self.0.clone().map(|(k, v)| (k, v)))
-                .finish()
-        }
-    }
-
-    f.debug_struct(name)
-        .field("flags", &dict.flags())
-        .field("entries", &Entries(dict.iter_cstr()))
-        .finish()
-}
-
 impl fmt::Debug for ForeignDict {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        dict_debug(self, "ForeignDict", f)
+        self.debug("ForeignDict", f)
     }
 }
 
@@ -437,7 +436,7 @@ impl ReadableDict for StaticDict {
 
 impl fmt::Debug for StaticDict {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        dict_debug(self, "StaticDict", f)
+        self.debug("StaticDict", f)
     }
 }
 
