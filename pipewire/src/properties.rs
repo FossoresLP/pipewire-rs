@@ -1,5 +1,5 @@
 use spa::prelude::*;
-use std::{ffi::CString, mem::ManuallyDrop, ptr};
+use std::{ffi::CString, fmt, mem::ManuallyDrop, ptr};
 
 /// A collection of key/value pairs.
 ///
@@ -149,6 +149,12 @@ impl Clone for Properties {
 impl Drop for Properties {
     fn drop(&mut self) {
         unsafe { pw_sys::pw_properties_free(self.ptr.as_ptr()) }
+    }
+}
+
+impl fmt::Debug for Properties {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.debug("Properties", f)
     }
 }
 
