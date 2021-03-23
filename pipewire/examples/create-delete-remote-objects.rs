@@ -2,8 +2,8 @@ use std::{cell::Cell, rc::Rc};
 
 use once_cell::unsync::OnceCell;
 use pipewire as pw;
+use pw::prelude::*;
 use pw::types::ObjectType;
-use spa::dict::ReadableDict;
 
 fn main() {
     // Initialize library and get the basic structures we need.

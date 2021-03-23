@@ -15,3 +15,8 @@ pub mod interface;
 pub mod list;
 pub mod pod;
 pub mod utils;
+
+/// prelude module re-exporing all the traits providing public API.
+pub mod prelude {
+    pub use crate::dict::{ReadableDict, WritableDict};
+}

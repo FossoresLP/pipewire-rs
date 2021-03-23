@@ -247,7 +247,8 @@ impl<'a> Iterator for Values<'a> {
 /// # Examples
 /// Create a `StaticDict` and access the stored values by key:
 /// ```rust
-/// use libspa::{ReadableDict, StaticDict, static_dict};
+/// use libspa::prelude::*;
+/// use libspa::{StaticDict, static_dict};
 ///
 /// static DICT: StaticDict = static_dict!{
 ///     "Key" => "Value",

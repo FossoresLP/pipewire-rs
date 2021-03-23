@@ -1,4 +1,4 @@
-use spa::dict::{ReadableDict, WritableDict};
+use spa::prelude::*;
 use std::{ffi::CString, mem::ManuallyDrop, ptr};
 
 /// A collection of key/value pairs.
@@ -6,8 +6,8 @@ use std::{ffi::CString, mem::ManuallyDrop, ptr};
 /// # Examples
 /// Create a `Properties` struct and access the stored values by key:
 /// ```rust
+/// use pipewire::prelude::*;
 /// use pipewire::{properties, Properties};
-/// use spa::dict::ReadableDict;
 ///
 /// let props = properties!{
 ///     "Key" => "Value",
@@ -38,8 +38,8 @@ pub struct Properties {
 ///
 /// Any expression that evaluates to a `impl Into<Vec<u8>>` can be used for both keys and values.
 /// ```rust
+/// use pipewire::prelude::*;
 /// use pipewire::properties;
-/// use spa::dict::ReadableDict;
 ///
 /// let key = String::from("Key");
 /// let value = vec![86, 97, 108, 117, 101]; // "Value" as an ASCII u8 vector.
@@ -155,7 +155,7 @@ impl Drop for Properties {
 #[cfg(test)]
 mod tests {
     use super::Properties;
-    use spa::dict::{ReadableDict, WritableDict};
+    use spa::prelude::*;
 
     #[test]
     fn new() {

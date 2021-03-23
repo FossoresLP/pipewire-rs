@@ -28,6 +28,7 @@ mod utils;
 // can always "use pipewire::prelude::*" without getting conflicts
 pub mod prelude {
     pub use crate::loop_::Loop;
+    pub use spa::prelude::*;
 }
 
 /// Initialize PipeWire

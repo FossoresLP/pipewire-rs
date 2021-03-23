@@ -15,7 +15,7 @@ use crate::{
     types::ObjectType,
     Error, Properties,
 };
-use spa::dict::{ForeignDict, ReadableDict};
+use spa::{dict::ForeignDict, prelude::*};
 
 #[derive(Debug)]
 pub struct Registry {
