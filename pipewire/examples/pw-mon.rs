@@ -71,8 +71,7 @@ fn monitor(remote: Option<String>) -> Result<()> {
     let context = pw::Context::new(&main_loop)?;
     let props = remote.map(|remote| {
         properties! {
-            // TODO: define constants from keys.h
-            "remote.name" => remote
+            *pw::keys::REMOTE_NAME => remote
         }
     });
     let core = context.connect(props)?;

@@ -22,6 +22,7 @@ pub mod proxy;
 pub mod registry;
 pub use spa;
 pub mod constants;
+pub mod keys;
 pub mod stream;
 pub mod types;
 mod utils;
