@@ -76,11 +76,124 @@ pub trait ReadableDict {
     /// Use [`iter_cstr`] if you need a non-utf8 key or value.
     ///
     /// [`iter_cstr`]: #method.iter_cstr
-    // FIXME: Some items might be integers, booleans, floats, doubles or pointers instead of strings.
-    // Perhaps we should return an enum that can be any of these values.
-    // See https://gitlab.freedesktop.org/pipewire/pipewire-rs/-/merge_requests/12#note_695914.
     fn get(&self, key: &str) -> Option<&str> {
         self.iter().find(|(k, _)| *k == key).map(|(_, v)| v)
+    }
+
+    /// Get the value associated with the provided key and convert it to a given type.
+    ///
+    /// If the dict does not contain the key or the value is non-utf8, `None` is returned.
+    ///
+    /// If the value associated with the key cannot be parsed to the requested type,
+    /// `Some(Err(ParseValueError))` is returned.
+    ///
+    /// See [`ParsableValue#foreign-impls`] for all the types which can be produced by this method.
+    ///
+    /// # Examples
+    /// ```
+    /// use libspa::prelude::*;
+    /// use libspa::{StaticDict, static_dict};
+    ///
+    /// static DICT: StaticDict = static_dict! {
+    ///     "true" => "true",
+    ///     "ten" => "10",
+    ///     "pi" => "3.14159265359",
+    ///     "pointer" => "pointer:0xdeadbeef"
+    /// };
+    ///
+    /// assert_eq!(DICT.parse("true"), Some(Ok(true)));
+    /// assert_eq!(DICT.parse("ten"), Some(Ok(10)));
+    /// assert_eq!(DICT.parse("ten"), Some(Ok(10.0)));
+    /// assert_eq!(DICT.parse("pi"), Some(Ok(3.14159265359)));
+    ///
+    /// let ptr = DICT.parse::<*const i32>("pointer").unwrap().unwrap();
+    /// assert!(!ptr.is_null());
+    /// ```
+    fn parse<T: ParsableValue>(&self, key: &str) -> Option<Result<T, ParseValueError>> {
+        self.iter()
+            .find(|(k, _)| *k == key)
+            .map(|(_, v)| match T::parse_value(v) {
+                Some(v) => Ok(v),
+                None => Err(ParseValueError {
+                    value: v.to_string(),
+                    type_name: std::any::type_name::<T>(),
+                }),
+            })
+    }
+}
+
+/// An error raised by [`ReadableDict::parse`] if the value cannot be converted to the requested type.
+#[derive(Debug, PartialEq)]
+pub struct ParseValueError {
+    value: String,
+    type_name: &'static str,
+}
+
+impl<'a> std::error::Error for ParseValueError {}
+
+impl<'a> fmt::Display for ParseValueError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "'{}' cannot be parsed to {}", self.value, self.type_name)
+    }
+}
+
+/// Trait implemented on types which can be returned by [`ReadableDict::parse`].
+pub trait ParsableValue: Copy {
+    /// Try parsing `value` to convert it to the requested type.
+    fn parse_value(value: &str) -> Option<Self>;
+}
+
+impl ParsableValue for bool {
+    fn parse_value(value: &str) -> Option<Self> {
+        // Same logic as pw_properties_parse_bool()
+        if value == "true" {
+            Some(true)
+        } else {
+            match value.parse::<i32>() {
+                Ok(1) => Some(true),
+                _ => Some(false),
+            }
+        }
+    }
+}
+
+macro_rules! impl_parsable_value_numeric {
+    ($type_:ty) => {
+        impl ParsableValue for $type_ {
+            fn parse_value(value: &str) -> Option<Self> {
+                value.parse().ok()
+            }
+        }
+    };
+}
+
+impl_parsable_value_numeric!(i32);
+impl_parsable_value_numeric!(i64);
+impl_parsable_value_numeric!(u64);
+impl_parsable_value_numeric!(f32);
+impl_parsable_value_numeric!(f64);
+// not implemented in properties.h but good to have
+impl_parsable_value_numeric!(i8);
+impl_parsable_value_numeric!(u8);
+impl_parsable_value_numeric!(i16);
+impl_parsable_value_numeric!(u16);
+impl_parsable_value_numeric!(u32);
+impl_parsable_value_numeric!(i128);
+impl_parsable_value_numeric!(u128);
+impl_parsable_value_numeric!(isize);
+impl_parsable_value_numeric!(usize);
+
+const POINTER_PREFIX: &str = "pointer:0x";
+
+impl<T> ParsableValue for *const T {
+    fn parse_value(value: &str) -> Option<Self> {
+        match value
+            .strip_prefix(POINTER_PREFIX)
+            .map(|addr| usize::from_str_radix(addr, 16))
+        {
+            Some(Ok(addr)) => Some(addr as *const T),
+            _ => None,
+        }
     }
 }
 
@@ -445,5 +558,101 @@ mod tests {
         assert_eq!(DICT.len(), 2);
         assert_eq!(DICT.get("K0"), Some("V0"));
         assert_eq!(DICT.get("K1"), Some("V1"));
+    }
+
+    #[test]
+    fn parse() {
+        use super::ParseValueError;
+
+        static DICT: StaticDict = static_dict! {
+            "true" => "true",
+            "false" => "false",
+            "1" => "1",
+            "10" => "10",
+            "-10" => "-10",
+            "i64-max" => "9223372036854775807",
+            "1.5" => "1.5",
+            "-1.5" => "-1.5",
+            "pointer" => "pointer:0xdeadbeef",
+            "badger" => "badger"
+        };
+
+        macro_rules! parse_error {
+            ($key:literal, $type_:ty) => {
+                assert!(matches!(
+                    DICT.parse::<$type_>($key),
+                    Some(Err(ParseValueError { .. }))
+                ));
+            };
+        }
+
+        assert_eq!(DICT.parse::<bool>("missing"), None);
+
+        assert_eq!(DICT.parse("true"), Some(Ok(true)));
+        assert_eq!(DICT.parse("1"), Some(Ok(true)));
+        assert_eq!(DICT.parse("false"), Some(Ok(false)));
+        assert_eq!(DICT.parse("10"), Some(Ok(false)));
+        assert_eq!(DICT.parse("badger"), Some(Ok(false)));
+
+        /* integer types */
+        assert_eq!(DICT.parse::<i32>("1"), Some(Ok(1)));
+        assert_eq!(DICT.parse::<i32>("-10"), Some(Ok(-10)));
+        parse_error!("badger", i32);
+        parse_error!("i64-max", i32);
+
+        assert_eq!(DICT.parse::<i64>("1"), Some(Ok(1)));
+        assert_eq!(DICT.parse::<i64>("-10"), Some(Ok(-10)));
+        assert_eq!(DICT.parse::<i64>("i64-max"), Some(Ok(i64::MAX)));
+        parse_error!("badger", i64);
+
+        assert_eq!(DICT.parse::<u64>("1"), Some(Ok(1)));
+        assert_eq!(DICT.parse::<u64>("i64-max"), Some(Ok(i64::MAX as u64)));
+        parse_error!("-10", u64);
+        parse_error!("badger", u64);
+
+        assert_eq!(DICT.parse::<i8>("1"), Some(Ok(1)));
+        assert_eq!(DICT.parse::<i8>("-10"), Some(Ok(-10)));
+
+        assert_eq!(DICT.parse::<u8>("1"), Some(Ok(1)));
+        parse_error!("-10", u8);
+
+        assert_eq!(DICT.parse::<i16>("1"), Some(Ok(1)));
+        assert_eq!(DICT.parse::<i16>("-10"), Some(Ok(-10)));
+
+        assert_eq!(DICT.parse::<u16>("1"), Some(Ok(1)));
+        parse_error!("-10", u16);
+
+        assert_eq!(DICT.parse::<u32>("1"), Some(Ok(1)));
+        parse_error!("-10", u32);
+
+        assert_eq!(DICT.parse::<i128>("1"), Some(Ok(1)));
+        assert_eq!(DICT.parse::<i128>("-10"), Some(Ok(-10)));
+
+        assert_eq!(DICT.parse::<u128>("1"), Some(Ok(1)));
+        parse_error!("-10", u128);
+
+        assert_eq!(DICT.parse::<isize>("1"), Some(Ok(1)));
+        assert_eq!(DICT.parse::<isize>("-10"), Some(Ok(-10)));
+
+        assert_eq!(DICT.parse::<usize>("1"), Some(Ok(1)));
+        parse_error!("-10", usize);
+
+        /* floating-point types */
+        assert_eq!(DICT.parse::<f32>("1"), Some(Ok(1.0)));
+        assert_eq!(DICT.parse::<f32>("-10"), Some(Ok(-10.0)));
+        assert_eq!(DICT.parse::<f32>("1.5"), Some(Ok(1.5)));
+        assert_eq!(DICT.parse::<f32>("-1.5"), Some(Ok(-1.5)));
+        parse_error!("badger", f32);
+
+        assert_eq!(DICT.parse::<f64>("1"), Some(Ok(1.0)));
+        assert_eq!(DICT.parse::<f64>("-10"), Some(Ok(-10.0)));
+        assert_eq!(DICT.parse::<f64>("1.5"), Some(Ok(1.5)));
+        assert_eq!(DICT.parse::<f64>("-1.5"), Some(Ok(-1.5)));
+        parse_error!("badger", f64);
+
+        /* pointer */
+        let ptr = DICT.parse::<*const i32>("pointer").unwrap().unwrap();
+        assert!(!ptr.is_null());
+        parse_error!("badger", *const i32);
     }
 }
