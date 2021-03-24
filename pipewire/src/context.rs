@@ -15,15 +15,23 @@ pub struct Context<T: Loop + Clone> {
 }
 
 impl<T: Loop + Clone> Context<T> {
-    // TODO: properties argument
-    pub fn new(loop_: &T) -> Result<Self, Error> {
-        let context = unsafe { pw_sys::pw_context_new(loop_.as_ptr(), ptr::null_mut(), 0) };
+    fn new_internal(loop_: &T, properties: Option<Properties>) -> Result<Self, Error> {
+        let props = properties.map_or(ptr::null(), |props| props.into_raw()) as *mut _;
+        let context = unsafe { pw_sys::pw_context_new(loop_.as_ptr(), props, 0) };
         let context = ptr::NonNull::new(context).ok_or(Error::CreationFailed)?;
 
         Ok(Context {
             ptr: context,
             loop_: loop_.clone(),
         })
+    }
+
+    pub fn new(loop_: &T) -> Result<Self, Error> {
+        Self::new_internal(loop_, None)
+    }
+
+    pub fn with_properties(loop_: &T, properties: Properties) -> Result<Self, Error> {
+        Self::new_internal(loop_, Some(properties))
     }
 
     fn as_ptr(&self) -> *mut pw_sys::pw_context {
