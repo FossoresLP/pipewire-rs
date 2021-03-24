@@ -5,8 +5,9 @@ use std::ops::Deref;
 use std::ptr;
 use std::rc::{Rc, Weak};
 
-use crate::error::Error;
 use crate::loop_::Loop;
+use crate::{error::Error, Properties};
+use spa::ReadableDict;
 
 #[derive(Debug, Clone)]
 pub struct MainLoop {
@@ -15,7 +16,14 @@ pub struct MainLoop {
 
 impl MainLoop {
     pub fn new() -> Result<Self, Error> {
-        let inner = MainLoopInner::new()?;
+        let inner = MainLoopInner::new::<Properties>(None)?;
+        Ok(Self {
+            inner: Rc::new(inner),
+        })
+    }
+
+    pub fn with_properties<T: ReadableDict>(properties: &T) -> Result<Self, Error> {
+        let inner = MainLoopInner::new(Some(properties))?;
         Ok(Self {
             inner: Rc::new(inner),
         })
@@ -57,10 +65,10 @@ pub struct MainLoopInner {
 }
 
 impl MainLoopInner {
-    // TODO: props argument
-    pub fn new() -> Result<Self, Error> {
+    fn new<T: ReadableDict>(properties: Option<&T>) -> Result<Self, Error> {
         unsafe {
-            let l = pw_sys::pw_main_loop_new(ptr::null());
+            let props = properties.map_or(ptr::null(), |props| props.get_dict_ptr()) as *mut _;
+            let l = pw_sys::pw_main_loop_new(props);
             let ptr = ptr::NonNull::new(l).ok_or(Error::CreationFailed)?;
 
             Ok(MainLoopInner { ptr })
