@@ -3,9 +3,12 @@
 
 use bitflags::bitflags;
 use libc::{c_char, c_void};
-use std::ffi::{CStr, CString};
-use std::pin::Pin;
+use std::{
+    ffi::{CStr, CString},
+    rc::Rc,
+};
 use std::{fmt, mem, ptr};
+use std::{ops::Deref, pin::Pin};
 
 use crate::{
     proxy::{Proxy, ProxyT},
@@ -15,15 +18,36 @@ use crate::{
 use spa::{dict::ForeignDict, result::SpaResult, spa_interface_call_method, AsyncSeq};
 
 pub const PW_ID_CORE: u32 = pw_sys::PW_ID_CORE;
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Core {
-    ptr: ptr::NonNull<pw_sys::pw_core>,
+    inner: Rc<CoreInner>,
 }
 
 impl Core {
     pub(crate) fn from_ptr(ptr: ptr::NonNull<pw_sys::pw_core>) -> Self {
-        Core { ptr }
+        let inner = CoreInner::from_ptr(ptr);
+        Self {
+            inner: Rc::new(inner),
+        }
+    }
+}
+
+impl Deref for Core {
+    type Target = CoreInner;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+#[derive(Debug)]
+pub struct CoreInner {
+    ptr: ptr::NonNull<pw_sys::pw_core>,
+}
+
+impl CoreInner {
+    fn from_ptr(ptr: ptr::NonNull<pw_sys::pw_core>) -> Self {
+        Self { ptr }
     }
 
     fn as_ptr(&self) -> *mut pw_sys::pw_core {
@@ -173,7 +197,7 @@ struct ListenerLocalCallbacks {
 }
 
 pub struct ListenerLocalBuilder<'a> {
-    core: &'a Core,
+    core: &'a CoreInner,
     cbs: ListenerLocalCallbacks,
 }
 
