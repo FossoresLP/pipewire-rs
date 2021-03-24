@@ -50,7 +50,13 @@ impl CoreInner {
         Self { ptr }
     }
 
-    fn as_ptr(&self) -> *mut pw_sys::pw_core {
+    /// Get the underlying pointer for this `Core`.
+    ///
+    /// ## Safety
+    ///
+    /// The lifetime of the pointer should not exceed the lifetime of the `Core`
+    /// object itself.
+    pub(crate) fn as_ptr(&self) -> *mut pw_sys::pw_core {
         self.ptr.as_ptr()
     }
 
