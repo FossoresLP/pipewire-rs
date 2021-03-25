@@ -1,5 +1,5 @@
 use spa::prelude::*;
-use std::{ffi::CString, fmt, mem::ManuallyDrop, ptr};
+use std::{ffi::CString, fmt, marker::PhantomData, mem::ManuallyDrop, ptr};
 
 /// A collection of key/value pairs.
 ///
@@ -158,10 +158,61 @@ impl fmt::Debug for Properties {
     }
 }
 
+pub struct PropertiesRef<'a> {
+    ptr: ptr::NonNull<pw_sys::pw_properties>,
+    // ensure that PropertiesRef does not outlive the object creating it
+    _phantom: PhantomData<&'a Properties>,
+}
+
+impl<'a> PropertiesRef<'a> {
+    /// Create a [`PropertiesRef`] struct from an existing raw `pw_properties` pointer.
+    ///
+    /// # Safety
+    /// - The provided pointer must point to a valid, well-aligned `pw_properties` struct.
+    /// - The generated `PropertiesRef` will not take ownership of the pointer so the
+    ///   `pw_properties` struct has to stays alive during all its lifetime.
+    pub unsafe fn from_ptr(ptr: ptr::NonNull<pw_sys::pw_properties>) -> Self {
+        Self {
+            ptr,
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Obtain a pointer to the underlying `pw_properties` struct.
+    ///
+    /// The pointer is only valid for the lifetime of the [`PropertiesRef`] struct the pointer was obtained from,
+    /// and must not be dereferenced after it is dropped.
+    ///
+    /// Ownership of the `pw_properties` struct is not transferred to the caller and must not be manually freed.
+    pub fn as_ptr(&self) -> *mut pw_sys::pw_properties {
+        self.ptr.as_ptr()
+    }
+
+    pub fn to_owned(&self) -> Properties {
+        unsafe {
+            let ptr = pw_sys::pw_properties_copy(self.as_ptr());
+            let ptr = ptr::NonNull::new_unchecked(ptr);
+
+            Properties::from_ptr(ptr)
+        }
+    }
+}
+
+impl<'a> ReadableDict for PropertiesRef<'a> {
+    fn get_dict_ptr(&self) -> *const spa_sys::spa_dict {
+        self.as_ptr().cast()
+    }
+}
+
+impl<'a> fmt::Debug for PropertiesRef<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.debug("PropertiesRef", f)
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::Properties;
-    use spa::prelude::*;
+    use super::*;
 
     #[test]
     fn new() {
@@ -227,5 +278,22 @@ mod tests {
         props.insert("K1", "V1");
         assert_eq!(props.len(), 2);
         assert_eq!(props.get("K1"), Some("V1"));
+    }
+
+    #[test]
+    fn properties_ref() {
+        let props = properties! {
+            "K0" => "V0"
+        };
+        let props_ref =
+            unsafe { PropertiesRef::from_ptr(std::ptr::NonNull::new(props.as_ptr()).unwrap()) };
+
+        assert_eq!(props_ref.len(), 1);
+        assert_eq!(props_ref.get("K0"), Some("V0"));
+        dbg!(&props_ref);
+
+        let props_copy = props_ref.to_owned();
+        assert_eq!(props_copy.len(), 1);
+        assert_eq!(props_copy.get("K0"), Some("V0"));
     }
 }
