@@ -304,8 +304,7 @@ impl<O: Write + Seek> PodSerializer<O> {
             .out
             .as_mut()
             .expect("PodSerializer does not contain a writer")
-            // This does not actually change the writer, only returns the current position.
-            .seek(SeekFrom::Current(0))
+            .stream_position()
             .expect("Could not get current position in writer");
 
         // Write a size of 0 for now, this will be updated when calling `StructPodSerializer.end()`.
