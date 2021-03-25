@@ -109,6 +109,20 @@ impl SpaResult {
             SpaSuccess::Sync(_) => panic!("result is synchronous success"),
         }
     }
+
+    /// Convert a [`SpaResult`] into either a synchronous success or an [`Error`].
+    ///
+    /// # Panics
+    ///
+    /// This method will panic if the result is an asynchronous success.
+    pub fn into_sync_result(self) -> Result<i32, Error> {
+        let res = self.into_result()?;
+
+        match res {
+            SpaSuccess::Sync(res) => Ok(res),
+            SpaSuccess::Async(_) => panic!("result is an asynchronous success"),
+        }
+    }
 }
 
 /// Error returned from a SPA method.
@@ -148,6 +162,8 @@ mod tests {
 
         assert_eq!(SpaResult::from_c(0).into_result(), Ok(SpaSuccess::Sync(0)));
         assert_eq!(SpaResult::from_c(1).into_result(), Ok(SpaSuccess::Sync(1)));
+        assert_eq!(SpaResult::from_c(0).into_sync_result(), Ok(0));
+
         assert_eq!(
             SpaResult::new_return_async(1).into_result(),
             Ok(SpaSuccess::Async(AsyncSeq::from_seq(1)))
@@ -155,6 +171,9 @@ mod tests {
 
         let err = SpaResult::from_c(-libc::EBUSY).into_result().unwrap_err();
         assert_eq!(format!("{}", err), "Device or resource busy",);
+
+        let res = SpaResult::from_c(-1).into_sync_result();
+        assert!(res.is_err());
     }
 
     #[test]
@@ -174,5 +193,11 @@ mod tests {
     #[test]
     fn spa_async_result_panic() {
         let _ = SpaResult::from_c(0).into_async_result();
+    }
+
+    #[should_panic]
+    #[test]
+    fn spa_sync_result_panic() {
+        let _ = SpaResult::new_return_async(10).into_sync_result();
     }
 }
