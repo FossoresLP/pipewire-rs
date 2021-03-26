@@ -1,0 +1,11 @@
+[package]
+name = "tools"
+version = "0.1.0"
+authors = ["Guillaume Desmottes <guillaume.desmottes@collabora.com>"]
+edition = "2018"
+description = "internal pipewire-rs tools such as code generator, not meant to be released"
+
+[dependencies]
+anyhow = "1"
+structopt = "0.3"
+regex = "1"

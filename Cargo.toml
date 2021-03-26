@@ -6,3 +6,5 @@ members = [
   "pipewire-sys",
   "pipewire",
 ]
+
+exclude = [ "tools" ]
