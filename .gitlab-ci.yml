@@ -154,9 +154,9 @@ deny:
     - .fedora
     - .fdo.distribution-image@fedora
   stage: extras
-  only:
-    - schedule
-    - release
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_COMMIT_BRANCH == "release"'
   script:
     - cargo deny check
 
@@ -165,9 +165,9 @@ outdated:
     - .fedora
     - .fdo.distribution-image@fedora
   stage: extras
-  only:
-    - schedule
-    - release
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_COMMIT_BRANCH == "release"'
   script:
     - cargo outdated --root-deps-only --exit-code 1 -v
 
