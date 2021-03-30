@@ -101,7 +101,7 @@ check commits:
     - .fdo.distribution-image@fedora
   stage: lint
   script:
-    - ci-fairy check-commits --textwidth 0 --no-signed-off-by
+    - ci-fairy check-commits --textwidth 0 --no-signed-off-by --branch main
 
 test-stable:
   extends:
