@@ -5,7 +5,7 @@ fn main() {
     let libs = system_deps::Config::new()
         .probe()
         .expect("Cannot find libspa");
-    let libspa = libs.get("libspa").unwrap();
+    let libspa = libs.get_by_name("libspa").unwrap();
 
     cc::Build::new()
         .file("tests/pod.c")

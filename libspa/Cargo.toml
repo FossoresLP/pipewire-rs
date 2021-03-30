@@ -25,7 +25,7 @@ pipewire-sys = { version = "0", path = "../pipewire-sys" }
 pipewire = { version = "0", path = "../pipewire" }
 
 [build-dependencies]
-system-deps = "2.0"
+system-deps = "3"
 cc = "1.0.66"
 
 [package.metadata.system-deps]
