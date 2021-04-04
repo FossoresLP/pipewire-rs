@@ -397,12 +397,12 @@ impl StaticDict {
 ///
 /// static PROPS: StaticDict = static_dict!{
 ///    "Key1" => "Value1",
-///    "Key2" => "Value2"
+///    "Key2" => "Value2",
 /// };
 /// ```
 #[macro_export]
 macro_rules! static_dict {
-    {$($k:expr => $v:expr),+} => {{
+    {$($k:expr => $v:expr),+ $(,)?} => {{
         use $crate::dict::{spa_dict_item, StaticDict, Flags};
         use std::ptr;
 

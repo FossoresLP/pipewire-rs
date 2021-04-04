@@ -32,7 +32,7 @@ pub struct Properties {
 ///
 /// let props = properties!{
 ///    "Key1" => "Value1",
-///    "Key2" => "Value2"
+///    "Key2" => "Value2",
 /// };
 /// ```
 ///
@@ -51,7 +51,7 @@ pub struct Properties {
 /// ```
 #[macro_export]
 macro_rules! properties {
-    {$($k:expr => $v:expr),+} => {{
+    {$($k:expr => $v:expr),+ $(,)?} => {{
         unsafe {
             $crate::Properties::from_ptr(std::ptr::NonNull::new_unchecked(pw_sys::pw_properties_new(
                 $(
