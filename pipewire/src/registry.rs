@@ -62,6 +62,20 @@ impl Registry {
 
         Proxy::new(proxy).downcast().map_err(|(_, e)| e)
     }
+
+    /// Attempt to destroy the global object with the specified id on the remote.
+    pub fn destroy_global(&self, global_id: u32) -> spa::SpaResult {
+        let result = unsafe {
+            spa::spa_interface_call_method!(
+                self.as_ptr(),
+                pw_sys::pw_registry_methods,
+                destroy,
+                global_id
+            )
+        };
+
+        spa::SpaResult::from_c(result)
+    }
 }
 
 impl Drop for Registry {
