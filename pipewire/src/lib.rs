@@ -26,6 +26,7 @@ pub mod keys;
 pub mod stream;
 pub mod types;
 mod utils;
+pub use pw_sys as sys;
 
 // Re-export all the traits in a prelude module, so that applications
 // can always "use pipewire::prelude::*" without getting conflicts

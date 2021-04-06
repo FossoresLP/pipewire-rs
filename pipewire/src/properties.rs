@@ -53,7 +53,7 @@ pub struct Properties {
 macro_rules! properties {
     {$($k:expr => $v:expr),+ $(,)?} => {{
         unsafe {
-            $crate::Properties::from_ptr(std::ptr::NonNull::new_unchecked(pw_sys::pw_properties_new(
+            $crate::Properties::from_ptr(std::ptr::NonNull::new_unchecked($crate::sys::pw_properties_new(
                 $(
                     std::ffi::CString::new($k).unwrap().as_ptr(),
                     std::ffi::CString::new($v).unwrap().as_ptr()
