@@ -41,7 +41,9 @@ pub mod prelude {
 /// Initialize the PipeWire system and set up debugging
 /// through the environment variable `PIPEWIRE_DEBUG`.
 pub fn init() {
-    unsafe { pw_sys::pw_init(ptr::null_mut(), ptr::null_mut()) }
+    use once_cell::sync::OnceCell;
+    static INITIALIZED: OnceCell<()> = OnceCell::new();
+    INITIALIZED.get_or_init(|| unsafe { pw_sys::pw_init(ptr::null_mut(), ptr::null_mut()) });
 }
 
 /// Deinitialize PipeWire

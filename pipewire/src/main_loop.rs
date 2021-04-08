@@ -15,7 +15,9 @@ pub struct MainLoop {
 }
 
 impl MainLoop {
+    /// Initialize Pipewire and create a new `MainLoop`
     pub fn new() -> Result<Self, Error> {
+        super::init();
         let inner = MainLoopInner::new::<Properties>(None)?;
         Ok(Self {
             inner: Rc::new(inner),
