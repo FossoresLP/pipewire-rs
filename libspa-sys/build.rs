@@ -21,10 +21,10 @@ fn main() {
         // Use `usize` for `size_t`. This behavior of bindgen changed because it is not
         // *technically* correct, but is the case in all architectures supported by Rust.
         .size_t_is_usize(true)
-        .whitelist_function("spa_.*")
-        .whitelist_type("spa_.*")
-        .whitelist_var("spa_.*")
-        .whitelist_var("SPA_.*")
+        .allowlist_function("spa_.*")
+        .allowlist_type("spa_.*")
+        .allowlist_var("spa_.*")
+        .allowlist_var("SPA_.*")
         .derive_eq(true);
 
     let builder = libspa.include_paths.iter().fold(builder, |builder, l| {

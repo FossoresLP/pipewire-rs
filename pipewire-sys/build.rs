@@ -19,13 +19,13 @@ fn main() {
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .size_t_is_usize(true)
-        .whitelist_function("pw_.*")
-        .whitelist_type("pw_.*")
-        .whitelist_var("pw_.*")
-        .whitelist_var("PW_.*")
-        .blacklist_function("spa_.*")
-        .blacklist_type("spa_.*")
-        .blacklist_item("spa_.*")
+        .allowlist_function("pw_.*")
+        .allowlist_type("pw_.*")
+        .allowlist_var("pw_.*")
+        .allowlist_var("PW_.*")
+        .blocklist_function("spa_.*")
+        .blocklist_type("spa_.*")
+        .blocklist_item("spa_.*")
         .raw_line("use spa_sys::*;");
 
     let builder = libpipewire
