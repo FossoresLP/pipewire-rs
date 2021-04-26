@@ -101,9 +101,9 @@ impl Stream {
     ///     &mainloop,
     ///     "video-test",
     ///     properties! {
-    ///         "media.type" => "Video",
-    ///         "media.category" => "Capture",
-    ///         "media.role" => "Camera"
+    ///         *pipewire::keys::MEDIA_TYPE => "Video",
+    ///         *pipewire::keys::MEDIA_CATEGORY => "Capture",
+    ///         *pipewire::keys::MEDIA_ROLE => "Camera",
     ///     },
     /// )
     /// .state_changed(|old, new| {

@@ -29,10 +29,9 @@ pub fn main() -> Result<(), pw::Error> {
         &mainloop,
         "video-test",
         properties! {
-            // TODO: use constants for keys
-            "media.type" => "Video",
-            "media.category" => "Capture",
-            "media.role" => "Camera"
+            *pw::keys::MEDIA_TYPE => "Video",
+            *pw::keys::MEDIA_CATEGORY => "Capture",
+            *pw::keys::MEDIA_ROLE => "Camera",
         },
     )
     .state_changed(|old, new| {
