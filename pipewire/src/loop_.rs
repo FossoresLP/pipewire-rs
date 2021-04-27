@@ -5,11 +5,14 @@ use std::ptr;
 
 use libc::{c_int, c_void};
 use signal::Signal;
-use spa::spa_interface_call_method;
+use spa::{result::SpaResult, spa_interface_call_method};
 
 use crate::utils::assert_main_thread;
 
-pub trait Loop {
+/// A trait for common functionality of the different pipewire loop kinds, most notably [`MainLoop`](`crate::MainLoop`).
+///
+/// Different kinds of events, such as receiving a signal (e.g. SIGTERM) can be attached to the loop using this trait.
+pub unsafe trait Loop {
     fn as_ptr(&self) -> *mut pw_sys::pw_loop;
 
     #[must_use]
@@ -59,6 +62,54 @@ pub trait Loop {
             loop_: &self,
             data,
         }
+    }
+
+    /// Register a new event with a callback to be called when the event happens.
+    ///
+    /// The returned [`EventSource`] can be used to trigger the event.
+    #[must_use]
+    fn add_event<F>(&self, callback: F) -> EventSource<F, Self>
+    where
+        F: Fn() + 'static,
+        Self: Sized,
+    {
+        unsafe extern "C" fn call_closure<F>(data: *mut c_void, _count: u64)
+        where
+            F: Fn(),
+        {
+            let callback = (data as *mut F).as_ref().unwrap();
+            callback();
+        }
+
+        let data = Box::into_raw(Box::new(callback));
+
+        let (source, data) = unsafe {
+            let mut iface = self
+                .as_ptr()
+                .as_ref()
+                .unwrap()
+                .utils
+                .as_ref()
+                .unwrap()
+                .iface;
+
+            let source = spa_interface_call_method!(
+                &mut iface as *mut spa_sys::spa_interface,
+                spa_sys::spa_loop_utils_methods,
+                add_event,
+                Some(call_closure::<F>),
+                data as *mut _
+            );
+            (source, Box::from_raw(data))
+        };
+
+        let ptr = ptr::NonNull::new(source).expect("source is NULL");
+
+        EventSource(Source {
+            ptr,
+            loop_: &self,
+            data,
+        })
     }
 
     fn destroy_source<F>(&self, source: &Source<F, Self>)
@@ -114,5 +165,47 @@ where
 {
     fn drop(&mut self) {
         self.loop_.destroy_source(&self)
+    }
+}
+
+/// A source that can be used to signal to a loop that an event has occurred.
+///
+/// This source can be obtained by calling [`add_event`](`Loop::add_event`) on a loop, registering a callback to it.
+/// By calling [`signal`](`EventSource::signal`) on the `EventSource`, the loop is signaled that the event has occurred.
+/// It will then call the callback at the next possible occasion.
+pub struct EventSource<'a, F, L>(Source<'a, F, L>)
+where
+    F: Fn() + 'static,
+    L: Loop;
+
+impl<'a, F, L> EventSource<'a, F, L>
+where
+    F: Fn() + 'static,
+    L: Loop,
+{
+    /// Signal the loop associated with this source that the event has occurred,
+    /// to make the loop call the callback at the next possible occasion.
+    pub fn signal(&self) -> SpaResult {
+        let res = unsafe {
+            let mut iface = self
+                .0
+                .loop_
+                .as_ptr()
+                .as_ref()
+                .unwrap()
+                .utils
+                .as_ref()
+                .unwrap()
+                .iface;
+
+            spa_interface_call_method!(
+                &mut iface as *mut spa_sys::spa_interface,
+                spa_sys::spa_loop_utils_methods,
+                signal_event,
+                self.0.as_ptr()
+            )
+        };
+
+        SpaResult::from_c(res)
     }
 }
