@@ -30,7 +30,7 @@ use nom::{
 use deserialize::{PodDeserialize, PodDeserializer};
 use serialize::{PodSerialize, PodSerializer};
 
-use crate::utils::{Fraction, Rectangle};
+use crate::utils::{Fraction, Id, Rectangle};
 
 /// Implementors of this trait are the canonical representation of a specific type of fixed sized SPA pod.
 ///
@@ -69,6 +69,7 @@ mod private {
     impl CanonicalFixedSizedPodSeal for f64 {}
     impl CanonicalFixedSizedPodSeal for super::Rectangle {}
     impl CanonicalFixedSizedPodSeal for super::Fraction {}
+    impl CanonicalFixedSizedPodSeal for super::Id {}
 }
 
 impl<T: CanonicalFixedSizedPod + Copy> FixedSizedPod for T {
@@ -222,6 +223,22 @@ impl CanonicalFixedSizedPod for Fraction {
             nom::sequence::pair(u32(Endianness::Native), u32(Endianness::Native)),
             |(num, denom)| Fraction { num, denom },
         )(input)
+    }
+}
+
+impl CanonicalFixedSizedPod for Id {
+    const TYPE: u32 = spa_sys::SPA_TYPE_Id;
+    const SIZE: u32 = 4;
+
+    fn serialize_body<O: Write>(&self, out: O) -> Result<O, GenError> {
+        gen_simple(ne_u32(self.0), out)
+    }
+
+    fn deserialize_body(input: &[u8]) -> IResult<&[u8], Self>
+    where
+        Self: Sized,
+    {
+        map(u32(Endianness::Native), Id)(input)
     }
 }
 

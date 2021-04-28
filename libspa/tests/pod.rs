@@ -5,7 +5,7 @@ use libspa::{
         serialize::{PodSerialize, PodSerializer, SerializeSuccess},
         CanonicalFixedSizedPod,
     },
-    utils::{Fraction, Rectangle},
+    utils::{Fraction, Id, Rectangle},
 };
 use std::{ffi::CString, io::Cursor};
 
@@ -626,4 +626,27 @@ fn struct_() {
         PodDeserializer::deserialize_from(&vec_rs),
         Ok((&[] as &[u8], struct_))
     )
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn id() {
+    let id = Id(7);
+
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &id)
+        .unwrap()
+        .0
+        .into_inner();
+    let mut vec_c: Vec<u8> = vec![0; 16];
+    assert_eq!(
+        unsafe { c::build_id(vec_c.as_mut_ptr(), vec_c.len(), id.0) },
+        0
+    );
+
+    assert_eq!(vec_rs, vec_c);
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_rs),
+        Ok((&[] as &[u8], id))
+    );
 }
