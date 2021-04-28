@@ -76,6 +76,12 @@ int build_array(uint8_t *buffer, size_t len, uint32_t child_size, uint32_t child
 	return spa_pod_builder_array(&b, child_size, child_type, n_elems, elems);
 }
 
+int build_fd(uint8_t *buffer, size_t len, int64_t fd)
+{
+	struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, len);
+	return spa_pod_builder_fd(&b, fd);
+}
+
 void build_test_struct(
 	uint8_t *buffer, size_t len, int32_t num, const char *string, uint32_t rect_width, uint32_t rect_height)
 {

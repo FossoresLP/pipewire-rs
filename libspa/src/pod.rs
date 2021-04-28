@@ -10,7 +10,10 @@
 pub mod deserialize;
 pub mod serialize;
 
-use std::io::{Seek, Write};
+use std::{
+    convert::TryInto,
+    io::{Seek, Write},
+};
 
 use cookie_factory::{
     bytes::{ne_f32, ne_f64, ne_i32, ne_i64, ne_u32},
@@ -30,7 +33,7 @@ use nom::{
 use deserialize::{PodDeserialize, PodDeserializer};
 use serialize::{PodSerialize, PodSerializer};
 
-use crate::utils::{Fraction, Id, Rectangle};
+use crate::utils::{Fd, Fraction, Id, Rectangle};
 
 /// Implementors of this trait are the canonical representation of a specific type of fixed sized SPA pod.
 ///
@@ -70,6 +73,7 @@ mod private {
     impl CanonicalFixedSizedPodSeal for super::Rectangle {}
     impl CanonicalFixedSizedPodSeal for super::Fraction {}
     impl CanonicalFixedSizedPodSeal for super::Id {}
+    impl CanonicalFixedSizedPodSeal for super::Fd {}
 }
 
 impl<T: CanonicalFixedSizedPod + Copy> FixedSizedPod for T {
@@ -239,6 +243,24 @@ impl CanonicalFixedSizedPod for Id {
         Self: Sized,
     {
         map(u32(Endianness::Native), Id)(input)
+    }
+}
+
+impl CanonicalFixedSizedPod for Fd {
+    const TYPE: u32 = spa_sys::SPA_TYPE_Fd;
+    const SIZE: u32 = 8;
+
+    fn serialize_body<O: Write>(&self, out: O) -> Result<O, GenError> {
+        gen_simple(ne_i64(self.0.into()), out)
+    }
+
+    fn deserialize_body(input: &[u8]) -> IResult<&[u8], Self>
+    where
+        Self: Sized,
+    {
+        map(i64(Endianness::Native), |fd| {
+            Fd(fd.try_into().expect("fd can't be casted to i32"))
+        })(input)
     }
 }
 

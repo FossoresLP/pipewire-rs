@@ -5,7 +5,7 @@ use libspa::{
         serialize::{PodSerialize, PodSerializer, SerializeSuccess},
         CanonicalFixedSizedPod,
     },
-    utils::{Fraction, Id, Rectangle},
+    utils::{Fd, Fraction, Id, Rectangle},
 };
 use std::{ffi::CString, io::Cursor};
 
@@ -42,6 +42,7 @@ pub mod c {
             rect_width: u32,
             rect_height: u32,
         ) -> *const spa_pod;
+        pub fn build_fd(buffer: *mut u8, len: usize, fd: i64) -> i32;
         pub fn print_pod(pod: *const spa_pod);
     }
 }
@@ -640,6 +641,29 @@ fn id() {
     let mut vec_c: Vec<u8> = vec![0; 16];
     assert_eq!(
         unsafe { c::build_id(vec_c.as_mut_ptr(), vec_c.len(), id.0) },
+        0
+    );
+
+    assert_eq!(vec_rs, vec_c);
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_rs),
+        Ok((&[] as &[u8], id))
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn fd() {
+    let id = Fd(7);
+
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &id)
+        .unwrap()
+        .0
+        .into_inner();
+    let mut vec_c: Vec<u8> = vec![0; 16];
+    assert_eq!(
+        unsafe { c::build_fd(vec_c.as_mut_ptr(), vec_c.len(), id.0.into()) },
         0
     );
 
