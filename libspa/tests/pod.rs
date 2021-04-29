@@ -655,15 +655,15 @@ fn id() {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn fd() {
-    let id = Fd(7);
+    let fd = Fd(7);
 
-    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &id)
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &fd)
         .unwrap()
         .0
         .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 16];
     assert_eq!(
-        unsafe { c::build_fd(vec_c.as_mut_ptr(), vec_c.len(), id.0.into()) },
+        unsafe { c::build_fd(vec_c.as_mut_ptr(), vec_c.len(), fd.0.into()) },
         0
     );
 
@@ -671,6 +671,6 @@ fn fd() {
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
-        Ok((&[] as &[u8], id))
+        Ok((&[] as &[u8], fd))
     );
 }
