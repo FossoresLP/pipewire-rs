@@ -15,11 +15,11 @@ use nom::{
     bytes::complete::{tag, take},
     combinator::{map, map_res, verify},
     number::{complete::u32, Endianness},
-    sequence::{delimited, terminated},
+    sequence::{delimited, preceded, terminated},
     IResult,
 };
 
-use super::{CanonicalFixedSizedPod, FixedSizedPod};
+use super::{CanonicalFixedSizedPod, FixedSizedPod, Value, ValueArray};
 use crate::utils::{Fd, Fraction, Id, Rectangle};
 
 /// Implementors of this trait can be deserialized from the raw SPA Pod format using a [`PodDeserializer`]-
@@ -248,9 +248,22 @@ impl<'de, 'a> PodDeserializer<'de> {
         })
     }
 
+    /// Variant of [`Self::parse`] not consuming the parsed data
+    fn peek<T, F>(&self, mut f: F) -> Result<T, nom::Err<nom::error::Error<&'de [u8]>>>
+    where
+        F: FnMut(&'de [u8]) -> IResult<&'de [u8], T>,
+    {
+        f(self.input).map(|(_input, result)| result)
+    }
+
     /// Parse the size from the header and ensure it has the correct type.
     pub(super) fn header<'b>(type_: u32) -> impl FnMut(&'b [u8]) -> IResult<&'b [u8], u32> {
         terminated(u32(Endianness::Native), tag(type_.to_ne_bytes()))
+    }
+
+    /// Parse and return the type from the header
+    pub(super) fn type_<'b>() -> impl FnMut(&'b [u8]) -> IResult<&'b [u8], u32> {
+        preceded(u32(Endianness::Native), u32(Endianness::Native))
     }
 
     /// Deserialize any fixed size pod.
@@ -519,6 +532,100 @@ impl<'de, 'a> PodDeserializer<'de> {
         let res = visitor.visit_array(elements)?;
         Ok((res, success))
     }
+
+    /// Deserialize any kind of pod using a visitor producing [`Value`].
+    pub fn deserialize_any(
+        self,
+    ) -> Result<(Value, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>> {
+        let type_ = self.peek(Self::type_())?;
+
+        match type_ {
+            spa_sys::SPA_TYPE_None => self.deserialize_none(ValueVisitor),
+            spa_sys::SPA_TYPE_Bool => self.deserialize_bool(ValueVisitor),
+            spa_sys::SPA_TYPE_Id => self.deserialize_id(ValueVisitor),
+            spa_sys::SPA_TYPE_Int => self.deserialize_int(ValueVisitor),
+            spa_sys::SPA_TYPE_Long => self.deserialize_long(ValueVisitor),
+            spa_sys::SPA_TYPE_Float => self.deserialize_float(ValueVisitor),
+            spa_sys::SPA_TYPE_Double => self.deserialize_double(ValueVisitor),
+            spa_sys::SPA_TYPE_String => self.deserialize_str(ValueVisitor),
+            spa_sys::SPA_TYPE_Bytes => self.deserialize_bytes(ValueVisitor),
+            spa_sys::SPA_TYPE_Rectangle => self.deserialize_rectangle(ValueVisitor),
+            spa_sys::SPA_TYPE_Fraction => self.deserialize_fraction(ValueVisitor),
+            spa_sys::SPA_TYPE_Fd => self.deserialize_fd(ValueVisitor),
+            spa_sys::SPA_TYPE_Struct => self.deserialize_struct(ValueVisitor),
+            spa_sys::SPA_TYPE_Array => self.deserialize_array_any(),
+            _ => Err(DeserializeError::InvalidType),
+        }
+    }
+
+    fn deserialize_array_any(
+        self,
+    ) -> Result<(Value, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>> {
+        let child_type = self.peek(preceded(Self::type_(), Self::type_()))?;
+
+        let (array, success) = match child_type {
+            spa_sys::SPA_TYPE_None => {
+                let (elements, success) = self.deserialize_array_vec::<()>()?;
+                let array = ValueArrayNoneVisitor.visit_array(elements)?;
+                (array, success)
+            }
+            spa_sys::SPA_TYPE_Bool => {
+                let (elements, success) = self.deserialize_array_vec::<bool>()?;
+                let array = ValueArrayBoolVisitor.visit_array(elements)?;
+                (array, success)
+            }
+            spa_sys::SPA_TYPE_Id => {
+                let (elements, success) = self.deserialize_array_vec::<Id>()?;
+                let array = ValueArrayIdVisitor.visit_array(elements)?;
+                (array, success)
+            }
+            spa_sys::SPA_TYPE_Int => {
+                let (elements, success) = self.deserialize_array_vec::<i32>()?;
+                let array = ValueArrayIntVisitor.visit_array(elements)?;
+                (array, success)
+            }
+            spa_sys::SPA_TYPE_Long => {
+                let (elements, success) = self.deserialize_array_vec::<i64>()?;
+                let array = ValueArrayLongVisitor.visit_array(elements)?;
+                (array, success)
+            }
+            spa_sys::SPA_TYPE_Float => {
+                let (elements, success) = self.deserialize_array_vec::<f32>()?;
+                let array = ValueArrayFloatVisitor.visit_array(elements)?;
+                (array, success)
+            }
+            spa_sys::SPA_TYPE_Double => {
+                let (elements, success) = self.deserialize_array_vec::<f64>()?;
+                let array = ValueArrayDoubleVisitor.visit_array(elements)?;
+                (array, success)
+            }
+            spa_sys::SPA_TYPE_Rectangle => {
+                let (elements, success) = self.deserialize_array_vec::<Rectangle>()?;
+                let array = ValueArrayRectangleVisitor.visit_array(elements)?;
+                (array, success)
+            }
+            spa_sys::SPA_TYPE_Fraction => {
+                let (elements, success) = self.deserialize_array_vec::<Fraction>()?;
+                let array = ValueArrayFractionVisitor.visit_array(elements)?;
+                (array, success)
+            }
+            spa_sys::SPA_TYPE_Fd => {
+                let (elements, success) = self.deserialize_array_vec::<Fd>()?;
+                let array = ValueArrayFdVisitor.visit_array(elements)?;
+                (array, success)
+            }
+            _ => return Err(DeserializeError::InvalidType),
+        };
+
+        Ok((Value::ValueArray(array), success))
+    }
+
+    /// Variant of [`Self::deserialize_from`] returning the parsed value as a [`Value`].
+    pub fn deserialize_any_from(
+        input: &'de [u8],
+    ) -> Result<(&'de [u8], Value), DeserializeError<&'de [u8]>> {
+        Self::deserialize_from(input)
+    }
 }
 
 /// This struct handles deserializing arrays.
@@ -655,6 +762,8 @@ pub enum DeserializeError<I> {
     Nom(nom::Err<nom::error::Error<I>>),
     /// The visitor does not support the type
     UnsupportedType,
+    /// The type is either invalid or not yet supported
+    InvalidType,
 }
 
 impl<I> From<nom::Err<nom::error::Error<I>>> for DeserializeError<I> {
@@ -911,5 +1020,214 @@ impl<'de, E: CanonicalFixedSizedPod + std::marker::Copy> Visitor<'de> for VecVis
 
     fn visit_array(&self, elements: Vec<E>) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
         Ok(elements)
+    }
+}
+
+/// A visitor producing [`Value`] for all type of values.
+pub struct ValueVisitor;
+
+impl<'de> Visitor<'de> for ValueVisitor {
+    type Value = Value;
+    type ArrayElem = std::convert::Infallible;
+
+    fn visit_none(&self) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(Value::None)
+    }
+
+    fn visit_bool(&self, v: bool) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(Value::Bool(v))
+    }
+
+    fn visit_int(&self, v: i32) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(Value::Int(v))
+    }
+
+    fn visit_long(&self, v: i64) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(Value::Long(v))
+    }
+
+    fn visit_float(&self, v: f32) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(Value::Float(v))
+    }
+
+    fn visit_double(&self, v: f64) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(Value::Double(v))
+    }
+
+    fn visit_string(&self, v: &'de str) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(Value::String(v.to_string()))
+    }
+
+    fn visit_bytes(&self, v: &'de [u8]) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(Value::Bytes(v.to_vec()))
+    }
+
+    fn visit_rectangle(&self, v: Rectangle) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(Value::Rectangle(v))
+    }
+
+    fn visit_fraction(&self, v: Fraction) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(Value::Fraction(v))
+    }
+
+    fn visit_id(&self, v: Id) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(Value::Id(v))
+    }
+
+    fn visit_fd(&self, v: Fd) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(Value::Fd(v))
+    }
+
+    fn visit_struct(
+        &self,
+        struct_deserializer: &mut StructPodDeserializer<'de>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        let mut res = Vec::new();
+
+        while let Some(value) = struct_deserializer.deserialize_field()? {
+            res.push(value);
+        }
+
+        Ok(Value::Struct(res))
+    }
+}
+
+struct ValueArrayNoneVisitor;
+
+impl<'de> Visitor<'de> for ValueArrayNoneVisitor {
+    type Value = ValueArray;
+    type ArrayElem = ();
+
+    fn visit_array(
+        &self,
+        elements: Vec<Self::ArrayElem>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(ValueArray::None(elements))
+    }
+}
+
+struct ValueArrayBoolVisitor;
+
+impl<'de> Visitor<'de> for ValueArrayBoolVisitor {
+    type Value = ValueArray;
+    type ArrayElem = bool;
+
+    fn visit_array(
+        &self,
+        elements: Vec<Self::ArrayElem>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(ValueArray::Bool(elements))
+    }
+}
+
+struct ValueArrayIdVisitor;
+
+impl<'de> Visitor<'de> for ValueArrayIdVisitor {
+    type Value = ValueArray;
+    type ArrayElem = Id;
+
+    fn visit_array(
+        &self,
+        elements: Vec<Self::ArrayElem>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(ValueArray::Id(elements))
+    }
+}
+
+struct ValueArrayIntVisitor;
+
+impl<'de> Visitor<'de> for ValueArrayIntVisitor {
+    type Value = ValueArray;
+    type ArrayElem = i32;
+
+    fn visit_array(
+        &self,
+        elements: Vec<Self::ArrayElem>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(ValueArray::Int(elements))
+    }
+}
+
+struct ValueArrayLongVisitor;
+
+impl<'de> Visitor<'de> for ValueArrayLongVisitor {
+    type Value = ValueArray;
+    type ArrayElem = i64;
+
+    fn visit_array(
+        &self,
+        elements: Vec<Self::ArrayElem>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(ValueArray::Long(elements))
+    }
+}
+
+struct ValueArrayFloatVisitor;
+
+impl<'de> Visitor<'de> for ValueArrayFloatVisitor {
+    type Value = ValueArray;
+    type ArrayElem = f32;
+
+    fn visit_array(
+        &self,
+        elements: Vec<Self::ArrayElem>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(ValueArray::Float(elements))
+    }
+}
+
+struct ValueArrayDoubleVisitor;
+
+impl<'de> Visitor<'de> for ValueArrayDoubleVisitor {
+    type Value = ValueArray;
+    type ArrayElem = f64;
+
+    fn visit_array(
+        &self,
+        elements: Vec<Self::ArrayElem>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(ValueArray::Double(elements))
+    }
+}
+
+struct ValueArrayRectangleVisitor;
+
+impl<'de> Visitor<'de> for ValueArrayRectangleVisitor {
+    type Value = ValueArray;
+    type ArrayElem = Rectangle;
+
+    fn visit_array(
+        &self,
+        elements: Vec<Self::ArrayElem>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(ValueArray::Rectangle(elements))
+    }
+}
+
+struct ValueArrayFractionVisitor;
+
+impl<'de> Visitor<'de> for ValueArrayFractionVisitor {
+    type Value = ValueArray;
+    type ArrayElem = Fraction;
+
+    fn visit_array(
+        &self,
+        elements: Vec<Self::ArrayElem>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(ValueArray::Fraction(elements))
+    }
+}
+
+struct ValueArrayFdVisitor;
+
+impl<'de> Visitor<'de> for ValueArrayFdVisitor {
+    type Value = ValueArray;
+    type ArrayElem = Fd;
+
+    fn visit_array(
+        &self,
+        elements: Vec<Self::ArrayElem>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(ValueArray::Fd(elements))
     }
 }

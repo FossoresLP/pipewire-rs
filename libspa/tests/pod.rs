@@ -5,7 +5,7 @@ use libspa::{
             DeserializeError, DeserializeSuccess, PodDeserialize, StructPodDeserializer, Visitor,
         },
         serialize::{PodSerialize, PodSerializer, SerializeSuccess},
-        CanonicalFixedSizedPod,
+        CanonicalFixedSizedPod, Value, ValueArray,
     },
     utils::{Fd, Fraction, Id, Rectangle},
 };
@@ -65,6 +65,11 @@ fn none() {
         PodDeserializer::deserialize_from(&vec_rs),
         Ok((&[] as &[u8], ()))
     );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::None))
+    );
 }
 
 #[test]
@@ -84,6 +89,11 @@ fn bool_true() {
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
         Ok((&[] as &[u8], true))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::Bool(true)))
     );
 }
 
@@ -105,6 +115,11 @@ fn bool_false() {
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
         Ok((&[] as &[u8], false))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::Bool(false)))
     );
 }
 
@@ -129,6 +144,11 @@ fn int() {
         PodDeserializer::deserialize_from(&vec_rs),
         Ok((&[] as &[u8], int))
     );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::Int(int)))
+    );
 }
 
 #[test]
@@ -151,6 +171,11 @@ fn long() {
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
         Ok((&[] as &[u8], long))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::Long(long)))
     );
 }
 
@@ -175,6 +200,11 @@ fn float() {
         PodDeserializer::deserialize_from(&vec_rs),
         Ok((&[] as &[u8], float))
     );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::Float(float)))
+    );
 }
 
 #[test]
@@ -197,6 +227,11 @@ fn double() {
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
         Ok((&[] as &[u8], double))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::Double(double)))
     );
 }
 
@@ -233,6 +268,11 @@ fn string() {
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
         Ok((&[] as &[u8], String::from(string)))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::String(string.to_string())))
     );
 }
 
@@ -271,6 +311,11 @@ fn string_no_padding() {
         PodDeserializer::deserialize_from(&vec_rs),
         Ok((&[] as &[u8], String::from(string)))
     );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::String(string.to_string())))
+    );
 }
 
 #[test]
@@ -307,6 +352,11 @@ fn string_empty() {
         PodDeserializer::deserialize_from(&vec_rs),
         Ok((&[] as &[u8], String::from(string)))
     );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::String(string.to_string())))
+    );
 }
 
 #[test]
@@ -335,6 +385,11 @@ fn bytes() {
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
         Ok((&[] as &[u8], Vec::from(bytes as &[u8])))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::Bytes(Vec::from(bytes as &[u8]))))
     );
 }
 
@@ -366,6 +421,11 @@ fn bytes_no_padding() {
         PodDeserializer::deserialize_from(&vec_rs),
         Ok((&[] as &[u8], Vec::from(bytes as &[u8])))
     );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::Bytes(Vec::from(bytes as &[u8]))))
+    );
 }
 
 #[test]
@@ -395,6 +455,11 @@ fn bytes_empty() {
         PodDeserializer::deserialize_from(&vec_rs),
         Ok((&[] as &[u8], Vec::from(bytes as &[u8])))
     );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::Bytes(Vec::from(bytes as &[u8]))))
+    );
 }
 
 #[test]
@@ -416,6 +481,11 @@ fn rectangle() {
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
         Ok((&[] as &[u8], rect))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::Rectangle(rect)))
     );
 }
 
@@ -442,6 +512,11 @@ fn fraction() {
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
         Ok((&[] as &[u8], fraction))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::Fraction(fraction)))
     );
 }
 
@@ -470,8 +545,46 @@ fn array_i32() {
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
-        Ok((&[] as &[u8], array))
-    )
+        Ok((&[] as &[u8], array.clone()))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::ValueArray(ValueArray::Int(array))))
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn array_bool() {
+    let array = vec![true, false];
+
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), array.as_slice())
+        .unwrap()
+        .0
+        .into_inner();
+    let mut vec_c: Vec<u8> = vec![0; 24];
+    unsafe {
+        c::build_array(
+            vec_c.as_mut_ptr(),
+            vec_c.len(),
+            <bool as CanonicalFixedSizedPod>::SIZE,
+            spa_sys::SPA_TYPE_Bool,
+            array.len() as u32,
+            array.as_ptr() as *const u8,
+        )
+    };
+    assert_eq!(vec_rs, vec_c);
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_rs),
+        Ok((&[] as &[u8], array.clone()))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::ValueArray(ValueArray::Bool(array))))
+    );
 }
 
 #[test]
@@ -498,8 +611,256 @@ fn array_empty() {
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
-        Ok((&[] as &[u8], array))
-    )
+        Ok((&[] as &[u8], array.clone()))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::ValueArray(ValueArray::None(array))))
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn array_id() {
+    let array = vec![Id(1), Id(2)];
+
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), array.as_slice())
+        .unwrap()
+        .0
+        .into_inner();
+    let mut vec_c: Vec<u8> = vec![0; 24];
+    unsafe {
+        c::build_array(
+            vec_c.as_mut_ptr(),
+            vec_c.len(),
+            <i32 as CanonicalFixedSizedPod>::SIZE,
+            spa_sys::SPA_TYPE_Id,
+            array.len() as u32,
+            array.as_ptr() as *const u8,
+        )
+    };
+    assert_eq!(vec_rs, vec_c);
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_rs),
+        Ok((&[] as &[u8], array.clone()))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::ValueArray(ValueArray::Id(array))))
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn array_long() {
+    let array: Vec<i64> = vec![1, 2, 3];
+
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), array.as_slice())
+        .unwrap()
+        .0
+        .into_inner();
+    let mut vec_c: Vec<u8> = vec![0; 40];
+    unsafe {
+        c::build_array(
+            vec_c.as_mut_ptr(),
+            vec_c.len(),
+            <i64 as CanonicalFixedSizedPod>::SIZE,
+            spa_sys::SPA_TYPE_Long,
+            array.len() as u32,
+            array.as_ptr() as *const u8,
+        )
+    };
+    assert_eq!(vec_rs, vec_c);
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_rs),
+        Ok((&[] as &[u8], array.clone()))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::ValueArray(ValueArray::Long(array))))
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn array_float() {
+    let array: Vec<f32> = vec![1.0, 2.2];
+
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), array.as_slice())
+        .unwrap()
+        .0
+        .into_inner();
+    let mut vec_c: Vec<u8> = vec![0; 24];
+    unsafe {
+        c::build_array(
+            vec_c.as_mut_ptr(),
+            vec_c.len(),
+            <f32 as CanonicalFixedSizedPod>::SIZE,
+            spa_sys::SPA_TYPE_Float,
+            array.len() as u32,
+            array.as_ptr() as *const u8,
+        )
+    };
+    assert_eq!(vec_rs, vec_c);
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_rs),
+        Ok((&[] as &[u8], array.clone()))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::ValueArray(ValueArray::Float(array))))
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn array_double() {
+    let array = vec![1.0, 2.2];
+
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), array.as_slice())
+        .unwrap()
+        .0
+        .into_inner();
+    let mut vec_c: Vec<u8> = vec![0; 32];
+    unsafe {
+        c::build_array(
+            vec_c.as_mut_ptr(),
+            vec_c.len(),
+            <f64 as CanonicalFixedSizedPod>::SIZE,
+            spa_sys::SPA_TYPE_Double,
+            array.len() as u32,
+            array.as_ptr() as *const u8,
+        )
+    };
+    assert_eq!(vec_rs, vec_c);
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_rs),
+        Ok((&[] as &[u8], array.clone()))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::ValueArray(ValueArray::Double(array))))
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn array_rectangle() {
+    let array = vec![
+        Rectangle {
+            width: 800,
+            height: 600,
+        },
+        Rectangle {
+            width: 1920,
+            height: 1080,
+        },
+    ];
+
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), array.as_slice())
+        .unwrap()
+        .0
+        .into_inner();
+    let mut vec_c: Vec<u8> = vec![0; 32];
+    unsafe {
+        c::build_array(
+            vec_c.as_mut_ptr(),
+            vec_c.len(),
+            <Rectangle as CanonicalFixedSizedPod>::SIZE,
+            spa_sys::SPA_TYPE_Rectangle,
+            array.len() as u32,
+            array.as_ptr() as *const u8,
+        )
+    };
+    assert_eq!(vec_rs, vec_c);
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_rs),
+        Ok((&[] as &[u8], array.clone()))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((
+            &[] as &[u8],
+            Value::ValueArray(ValueArray::Rectangle(array))
+        ))
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn array_fraction() {
+    let array = vec![Fraction { num: 1, denom: 2 }, Fraction { num: 2, denom: 3 }];
+
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), array.as_slice())
+        .unwrap()
+        .0
+        .into_inner();
+    let mut vec_c: Vec<u8> = vec![0; 32];
+    unsafe {
+        c::build_array(
+            vec_c.as_mut_ptr(),
+            vec_c.len(),
+            <Fraction as CanonicalFixedSizedPod>::SIZE,
+            spa_sys::SPA_TYPE_Fraction,
+            array.len() as u32,
+            array.as_ptr() as *const u8,
+        )
+    };
+    assert_eq!(vec_rs, vec_c);
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_rs),
+        Ok((&[] as &[u8], array.clone()))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::ValueArray(ValueArray::Fraction(array))))
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn array_fd() {
+    let array = vec![Fd(10), Fd(20)];
+
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), array.as_slice())
+        .unwrap()
+        .0
+        .into_inner();
+    let mut vec_c: Vec<u8> = vec![0; 32];
+    unsafe {
+        c::build_array(
+            vec_c.as_mut_ptr(),
+            vec_c.len(),
+            <Fd as CanonicalFixedSizedPod>::SIZE,
+            spa_sys::SPA_TYPE_Fd,
+            array.len() as u32,
+            array.as_ptr() as *const u8,
+        )
+    };
+    assert_eq!(vec_rs, vec_c);
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_rs),
+        Ok((&[] as &[u8], array.clone()))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::ValueArray(ValueArray::Fd(array))))
+    );
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -644,7 +1005,22 @@ fn struct_() {
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
         Ok((&[] as &[u8], struct_))
-    )
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((
+            &[] as &[u8],
+            Value::Struct(vec![
+                Value::Int(313),
+                Value::String("foo".into()),
+                Value::Struct(vec![Value::Rectangle(Rectangle {
+                    width: 31,
+                    height: 14
+                })])
+            ])
+        ))
+    );
 }
 
 #[test]
@@ -668,6 +1044,11 @@ fn id() {
         PodDeserializer::deserialize_from(&vec_rs),
         Ok((&[] as &[u8], id))
     );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::Id(id)))
+    );
 }
 
 #[test]
@@ -690,5 +1071,10 @@ fn fd() {
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
         Ok((&[] as &[u8], fd))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((&[] as &[u8], Value::Fd(fd)))
     );
 }

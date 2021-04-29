@@ -460,3 +460,75 @@ impl<'de> PodDeserialize<'de> for Fd {
         deserializer.deserialize_fd(FdVisitor)
     }
 }
+
+impl<'de> PodDeserialize<'de> for Value {
+    fn deserialize(
+        deserializer: PodDeserializer<'de>,
+    ) -> Result<
+        (Self, deserialize::DeserializeSuccess<'de>),
+        deserialize::DeserializeError<&'de [u8]>,
+    >
+    where
+        Self: Sized,
+    {
+        deserializer.deserialize_any()
+    }
+}
+
+/// A typed pod value.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Value {
+    /// no value or a NULL pointer.
+    None,
+    /// a boolean value.
+    Bool(bool),
+    /// an enumerated value.
+    Id(Id),
+    /// a 32 bits integer.
+    Int(i32),
+    /// a 64 bits integer.
+    Long(i64),
+    /// a 32 bits floating.
+    Float(f32),
+    /// a 64 bits floating.
+    Double(f64),
+    /// a string.
+    String(String),
+    /// a byte array.
+    Bytes(Vec<u8>),
+    /// a rectangle with width and height.
+    Rectangle(Rectangle),
+    /// a fraction with numerator and denominator.
+    Fraction(Fraction),
+    /// a file descriptor.
+    Fd(Fd),
+    /// an array of same type objects.
+    ValueArray(ValueArray),
+    /// a collection of types and objects.
+    Struct(Vec<Value>),
+}
+
+/// an array of same type objects.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ValueArray {
+    /// an array of none.
+    None(Vec<()>),
+    /// an array of booleans.
+    Bool(Vec<bool>),
+    /// an array of Id.
+    Id(Vec<Id>),
+    /// an array of 32 bits integer.
+    Int(Vec<i32>),
+    /// an array of 64 bits integer.
+    Long(Vec<i64>),
+    /// an array of 32 bits floating.
+    Float(Vec<f32>),
+    /// an array of 64 bits floating.
+    Double(Vec<f64>),
+    /// an array of Rectangle.
+    Rectangle(Vec<Rectangle>),
+    /// an array of Fraction.
+    Fraction(Vec<Fraction>),
+    /// an array of Fd.
+    Fd(Vec<Fd>),
+}
