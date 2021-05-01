@@ -129,6 +129,7 @@ pub mod port;
 pub mod proxy;
 pub mod registry;
 pub use spa;
+pub mod buffer;
 pub mod channel;
 pub mod constants;
 pub mod keys;

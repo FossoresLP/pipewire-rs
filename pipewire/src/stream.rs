@@ -3,6 +3,7 @@
 
 //! Pipewire Stream
 
+use crate::buffer::Buffer;
 use crate::{error::Error, Core, Loop, MainLoop, Properties, PropertiesRef};
 use bitflags::bitflags;
 use spa::result::SpaResult;
@@ -198,10 +199,14 @@ impl Stream {
     /// # Safety
     ///
     /// The pointer returned could be NULL if no buffer is available. The buffer
-    /// should be returend to the stream once processing is complete.
+    /// should be returned to the stream once processing is complete.
     // FIXME: provide safe queue and dequeue API
     pub unsafe fn dequeue_raw_buffer(&self) -> *mut pw_sys::pw_buffer {
         pw_sys::pw_stream_dequeue_buffer(self.as_ptr())
+    }
+
+    pub fn dequeue_buffer(&self) -> Option<Buffer> {
+        unsafe { Buffer::from_raw(self.dequeue_raw_buffer(), &self) }
     }
 
     /// Return a Buffer to the Stream
