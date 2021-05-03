@@ -293,7 +293,7 @@ impl<'de, 'a> PodDeserializer<'de> {
     /// Start parsing an array pod containing elements of type `E`.
     ///
     /// # Returns
-    /// - The array serializer and the number of elements in the array on success
+    /// - The array deserializer and the number of elements in the array on success
     /// - An error if the header could not be parsed
     #[allow(clippy::type_complexity)] // Return type cannot be reasonably made smaller.
     pub fn deserialize_array<E>(
