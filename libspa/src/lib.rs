@@ -17,6 +17,7 @@ pub mod list;
 pub mod pod;
 pub mod utils;
 pub use direction::*;
+pub mod flags;
 
 /// prelude module re-exporing all the traits providing public API.
 pub mod prelude {

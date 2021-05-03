@@ -1,11 +1,11 @@
 // Copyright The pipewire-rs Contributors.
 // SPDX-License-Identifier: MIT
 
-use std::{convert::TryInto, ptr, time::Duration};
+use std::{convert::TryInto, os::unix::prelude::*, ptr, time::Duration};
 
 use libc::{c_int, c_void};
 use signal::Signal;
-use spa::{result::SpaResult, spa_interface_call_method};
+use spa::{flags::IoFlags, result::SpaResult, spa_interface_call_method};
 
 use crate::utils::assert_main_thread;
 
@@ -14,6 +14,59 @@ use crate::utils::assert_main_thread;
 /// Different kinds of events, such as receiving a signal (e.g. SIGTERM) can be attached to the loop using this trait.
 pub unsafe trait Loop {
     fn as_ptr(&self) -> *mut pw_sys::pw_loop;
+
+    #[must_use]
+    fn add_io<I, F>(&self, io: I, event_mask: IoFlags, callback: F) -> IoSource<I, Self>
+    where
+        I: AsRawFd,
+        F: Fn(&mut I) + 'static,
+        Self: Sized,
+    {
+        unsafe extern "C" fn call_closure<I>(data: *mut c_void, _fd: RawFd, _mask: u32)
+        where
+            I: AsRawFd,
+        {
+            let (io, callback) = (data as *mut IoSourceData<I>).as_mut().unwrap();
+            callback(io);
+        }
+
+        let fd = io.as_raw_fd();
+        let data = Box::into_raw(Box::new((io, Box::new(callback) as Box<dyn Fn(&mut I)>)));
+
+        let (source, data) = unsafe {
+            let mut iface = self
+                .as_ptr()
+                .as_ref()
+                .unwrap()
+                .utils
+                .as_ref()
+                .unwrap()
+                .iface;
+
+            let source = spa_interface_call_method!(
+                &mut iface as *mut spa_sys::spa_interface,
+                spa_sys::spa_loop_utils_methods,
+                add_io,
+                fd,
+                // FIXME: User provided mask instead
+                event_mask.bits(),
+                // Never let the loop close the fd, this should be handled via `Drop` implementations.
+                false,
+                Some(call_closure::<I>),
+                data as *mut _
+            );
+
+            (source, Box::from_raw(data))
+        };
+
+        let ptr = ptr::NonNull::new(source).expect("source is NULL");
+
+        IoSource {
+            ptr,
+            loop_: &self,
+            _data: data,
+        }
+    }
 
     #[must_use]
     fn add_signal_local<F>(&self, signal: Signal, callback: F) -> SignalSource<F, Self>
@@ -190,6 +243,38 @@ pub unsafe trait Loop {
 pub trait IsASource {
     /// Return a valid pointer to a raw `spa_source`.
     fn as_ptr(&self) -> *mut spa_sys::spa_source;
+}
+
+type IoSourceData<I> = (I, Box<dyn Fn(&mut I) + 'static>);
+pub struct IoSource<'l, I, L>
+where
+    I: AsRawFd,
+    L: Loop,
+{
+    ptr: ptr::NonNull<spa_sys::spa_source>,
+    loop_: &'l L,
+    // Store data wrapper to prevent leak
+    _data: Box<IoSourceData<I>>,
+}
+
+impl<'l, I, L> IsASource for IoSource<'l, I, L>
+where
+    I: AsRawFd,
+    L: Loop,
+{
+    fn as_ptr(&self) -> *mut spa_sys::spa_source {
+        self.ptr.as_ptr()
+    }
+}
+
+impl<'l, I, L> Drop for IoSource<'l, I, L>
+where
+    I: AsRawFd,
+    L: Loop,
+{
+    fn drop(&mut self) {
+        self.loop_.destroy_source(self)
+    }
 }
 
 pub struct SignalSource<'a, F, L>
