@@ -1,7 +1,7 @@
 // Copyright The pipewire-rs Contributors.
 // SPDX-License-Identifier: MIT
 
-use std::ptr;
+use std::{convert::TryInto, ptr, time::Duration};
 
 use libc::{c_int, c_void};
 use signal::Signal;
@@ -106,6 +106,56 @@ pub unsafe trait Loop {
         let ptr = ptr::NonNull::new(source).expect("source is NULL");
 
         EventSource {
+            ptr,
+            loop_: &self,
+            _data: data,
+        }
+    }
+
+    /// Register a timer with the loop.
+    ///
+    /// The timer will start out inactive, and the returned [`TimerSource`] can be used to arm the timer, or disarm it again.
+    ///
+    /// The callback will be provided with the number of timer expirations since the callback was last called.
+    #[must_use]
+    fn add_timer<F>(&self, callback: F) -> TimerSource<F, Self>
+    where
+        F: Fn(u64) + 'static,
+        Self: Sized,
+    {
+        unsafe extern "C" fn call_closure<F>(data: *mut c_void, expirations: u64)
+        where
+            F: Fn(u64),
+        {
+            let callback = (data as *mut F).as_ref().unwrap();
+            callback(expirations);
+        }
+
+        let data = Box::into_raw(Box::new(callback));
+
+        let (source, data) = unsafe {
+            let mut iface = self
+                .as_ptr()
+                .as_ref()
+                .unwrap()
+                .utils
+                .as_ref()
+                .unwrap()
+                .iface;
+
+            let source = spa_interface_call_method!(
+                &mut iface as *mut spa_sys::spa_interface,
+                spa_sys::spa_loop_utils_methods,
+                add_timer,
+                Some(call_closure::<F>),
+                data as *mut _
+            );
+            (source, Box::from_raw(data))
+        };
+
+        let ptr = ptr::NonNull::new(source).expect("source is NULL");
+
+        TimerSource {
             ptr,
             loop_: &self,
             _data: data,
@@ -233,6 +283,95 @@ where
 impl<'a, F, L> Drop for EventSource<'a, F, L>
 where
     F: Fn() + 'static,
+    L: Loop,
+{
+    fn drop(&mut self) {
+        self.loop_.destroy_source(self)
+    }
+}
+
+/// A source that can be used to have a callback called on a timer.
+///
+/// This source can be obtained by calling [`add_timer`](`Loop::add_timer`) on a loop, registering a callback to it.
+///
+/// The timer starts out inactive.
+/// You can arm or disarm the timer by calling [`update_timer`](`Self::update_timer`).
+pub struct TimerSource<'a, F, L>
+where
+    F: Fn(u64) + 'static,
+    L: Loop,
+{
+    ptr: ptr::NonNull<spa_sys::spa_source>,
+    loop_: &'a L,
+    // Store data wrapper to prevent leak
+    _data: Box<F>,
+}
+
+impl<'a, F, L> TimerSource<'a, F, L>
+where
+    F: Fn(u64) + 'static,
+    L: Loop,
+{
+    /// Arm or disarm the timer.
+    ///
+    /// The timer will be called the next time after the provided `value` duration.
+    /// After that, the timer will be repeatedly called again at the the specified `interval`.
+    ///
+    /// If `interval` is `None` or zero, the timer will only be called once. \
+    /// If `value` is `None` or zero, the timer will be disabled.
+    ///
+    /// # Panics
+    /// The provided durations seconds must fit in an i64. Otherwise, this function will panic.
+    pub fn update_timer(&self, value: Option<Duration>, interval: Option<Duration>) -> SpaResult {
+        fn duration_to_timespec(duration: Duration) -> spa_sys::timespec {
+            spa_sys::timespec {
+                tv_sec: duration.as_secs().try_into().expect("Duration too long"),
+                tv_nsec: duration.subsec_nanos().into(),
+            }
+        }
+
+        let value = duration_to_timespec(value.unwrap_or_default());
+        let interval = duration_to_timespec(interval.unwrap_or_default());
+
+        let res = unsafe {
+            let mut iface = self
+                .loop_
+                .as_ptr()
+                .as_ref()
+                .unwrap()
+                .utils
+                .as_ref()
+                .unwrap()
+                .iface;
+
+            spa_interface_call_method!(
+                &mut iface as *mut spa_sys::spa_interface,
+                spa_sys::spa_loop_utils_methods,
+                update_timer,
+                self.as_ptr(),
+                &value as *const _ as *mut _,
+                &interval as *const _ as *mut _,
+                false
+            )
+        };
+
+        SpaResult::from_c(res)
+    }
+}
+
+impl<'a, F, L> IsASource for TimerSource<'a, F, L>
+where
+    F: Fn(u64) + 'static,
+    L: Loop,
+{
+    fn as_ptr(&self) -> *mut spa_sys::spa_source {
+        self.ptr.as_ptr()
+    }
+}
+
+impl<'a, F, L> Drop for TimerSource<'a, F, L>
+where
+    F: Fn(u64) + 'static,
     L: Loop,
 {
     fn drop(&mut self) {
