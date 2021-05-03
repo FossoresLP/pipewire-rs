@@ -19,6 +19,7 @@ spa = { package = "libspa", version = "0", path = "../libspa" }
 anyhow = "1"
 thiserror = "1"
 libc = "0.2"
+errno = "0.2"
 signal = "0.7"
 bitflags = "1.2"
 once_cell = "1.0"
