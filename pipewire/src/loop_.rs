@@ -16,7 +16,7 @@ pub unsafe trait Loop {
     fn as_ptr(&self) -> *mut pw_sys::pw_loop;
 
     #[must_use]
-    fn add_signal_local<F>(&self, signal: Signal, callback: F) -> Source<F, Self>
+    fn add_signal_local<F>(&self, signal: Signal, callback: F) -> SignalSource<F, Self>
     where
         F: Fn() + 'static,
         Self: Sized,
@@ -57,10 +57,10 @@ pub unsafe trait Loop {
 
         let ptr = ptr::NonNull::new(source).expect("source is NULL");
 
-        Source {
+        SignalSource {
             ptr,
             loop_: &self,
-            data,
+            _data: data,
         }
     }
 
@@ -105,16 +105,16 @@ pub unsafe trait Loop {
 
         let ptr = ptr::NonNull::new(source).expect("source is NULL");
 
-        EventSource(Source {
+        EventSource {
             ptr,
             loop_: &self,
-            data,
-        })
+            _data: data,
+        }
     }
 
-    fn destroy_source<F>(&self, source: &Source<F, Self>)
+    fn destroy_source<S>(&self, source: &S)
     where
-        F: Fn() + 'static,
+        S: IsASource,
         Self: Sized,
     {
         unsafe {
@@ -136,7 +136,13 @@ pub unsafe trait Loop {
         }
     }
 }
-pub struct Source<'a, F, L>
+
+pub trait IsASource {
+    /// Return a valid pointer to a raw `spa_source`.
+    fn as_ptr(&self) -> *mut spa_sys::spa_source;
+}
+
+pub struct SignalSource<'a, F, L>
 where
     F: Fn() + 'static,
     L: Loop,
@@ -144,11 +150,10 @@ where
     ptr: ptr::NonNull<spa_sys::spa_source>,
     loop_: &'a L,
     // Store data wrapper to prevent leak
-    #[allow(dead_code)]
-    data: Box<F>,
+    _data: Box<F>,
 }
 
-impl<'a, F, L> Source<'a, F, L>
+impl<'a, F, L> IsASource for SignalSource<'a, F, L>
 where
     F: Fn() + 'static,
     L: Loop,
@@ -158,13 +163,13 @@ where
     }
 }
 
-impl<'a, F, L> Drop for Source<'a, F, L>
+impl<'a, F, L> Drop for SignalSource<'a, F, L>
 where
     F: Fn() + 'static,
     L: Loop,
 {
     fn drop(&mut self) {
-        self.loop_.destroy_source(&self)
+        self.loop_.destroy_source(self)
     }
 }
 
@@ -173,10 +178,26 @@ where
 /// This source can be obtained by calling [`add_event`](`Loop::add_event`) on a loop, registering a callback to it.
 /// By calling [`signal`](`EventSource::signal`) on the `EventSource`, the loop is signaled that the event has occurred.
 /// It will then call the callback at the next possible occasion.
-pub struct EventSource<'a, F, L>(Source<'a, F, L>)
+pub struct EventSource<'a, F, L>
 where
     F: Fn() + 'static,
-    L: Loop;
+    L: Loop,
+{
+    ptr: ptr::NonNull<spa_sys::spa_source>,
+    loop_: &'a L,
+    // Store data wrapper to prevent leak
+    _data: Box<F>,
+}
+
+impl<'a, F, L> IsASource for EventSource<'a, F, L>
+where
+    F: Fn() + 'static,
+    L: Loop,
+{
+    fn as_ptr(&self) -> *mut spa_sys::spa_source {
+        self.ptr.as_ptr()
+    }
+}
 
 impl<'a, F, L> EventSource<'a, F, L>
 where
@@ -188,7 +209,6 @@ where
     pub fn signal(&self) -> SpaResult {
         let res = unsafe {
             let mut iface = self
-                .0
                 .loop_
                 .as_ptr()
                 .as_ref()
@@ -202,10 +222,20 @@ where
                 &mut iface as *mut spa_sys::spa_interface,
                 spa_sys::spa_loop_utils_methods,
                 signal_event,
-                self.0.as_ptr()
+                self.as_ptr()
             )
         };
 
         SpaResult::from_c(res)
+    }
+}
+
+impl<'a, F, L> Drop for EventSource<'a, F, L>
+where
+    F: Fn() + 'static,
+    L: Loop,
+{
+    fn drop(&mut self) {
+        self.loop_.destroy_source(self)
     }
 }
