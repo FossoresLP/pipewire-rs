@@ -27,10 +27,15 @@ use nom::{
     IResult,
 };
 
-use deserialize::{PodDeserialize, PodDeserializer};
+use deserialize::{BoolVisitor, NoneVisitor, PodDeserialize, PodDeserializer};
 use serialize::{PodSerialize, PodSerializer};
 
 use crate::utils::{Fd, Fraction, Id, Rectangle};
+
+use self::deserialize::{
+    DoubleVisitor, FdVisitor, FloatVisitor, FractionVisitor, IdVisitor, IntVisitor, LongVisitor,
+    RectangleVisitor,
+};
 
 /// Implementors of this trait are the canonical representation of a specific type of fixed sized SPA pod.
 ///
@@ -262,12 +267,12 @@ impl CanonicalFixedSizedPod for Fd {
 /// Implementors of this trait can be serialized into pods that always have the same size.
 /// This lets them be used as elements in `Array` type SPA Pods.
 ///
-/// Implementors of this automatically implement [`PodSerialize`] and [`PodDeserialize`].
+/// Implementors of this automatically implement [`PodSerialize`].
 ///
-/// (De)serialization is accomplished by having the type convert itself into/from the canonical representation of this pod,
+/// Serialization is accomplished by having the type convert itself into/from the canonical representation of this pod,
 /// e.g. `i32` for a `Int` type pod.
 ///
-/// That type then takes care of the actual (de)serialization.
+/// That type then takes care of the actual serialization.
 ///
 /// See the [`CanonicalFixedSizedPod`] trait for a list of possible target types.
 ///
@@ -316,7 +321,7 @@ impl<T: FixedSizedPod> PodSerialize for T {
     }
 }
 
-impl<'de, T: FixedSizedPod> PodDeserialize<'de> for T {
+impl<'de> PodDeserialize<'de> for () {
     fn deserialize(
         deserializer: PodDeserializer<'de>,
     ) -> Result<
@@ -326,6 +331,132 @@ impl<'de, T: FixedSizedPod> PodDeserialize<'de> for T {
     where
         Self: Sized,
     {
-        deserializer.deserialize_fixed_sized_pod::<Self>()
+        deserializer.deserialize_none(NoneVisitor)
+    }
+}
+
+impl<'de> PodDeserialize<'de> for bool {
+    fn deserialize(
+        deserializer: PodDeserializer<'de>,
+    ) -> Result<
+        (Self, deserialize::DeserializeSuccess<'de>),
+        deserialize::DeserializeError<&'de [u8]>,
+    >
+    where
+        Self: Sized,
+    {
+        deserializer.deserialize_bool(BoolVisitor)
+    }
+}
+
+impl<'de> PodDeserialize<'de> for i32 {
+    fn deserialize(
+        deserializer: PodDeserializer<'de>,
+    ) -> Result<
+        (Self, deserialize::DeserializeSuccess<'de>),
+        deserialize::DeserializeError<&'de [u8]>,
+    >
+    where
+        Self: Sized,
+    {
+        deserializer.deserialize_int(IntVisitor)
+    }
+}
+
+impl<'de> PodDeserialize<'de> for i64 {
+    fn deserialize(
+        deserializer: PodDeserializer<'de>,
+    ) -> Result<
+        (Self, deserialize::DeserializeSuccess<'de>),
+        deserialize::DeserializeError<&'de [u8]>,
+    >
+    where
+        Self: Sized,
+    {
+        deserializer.deserialize_long(LongVisitor)
+    }
+}
+
+impl<'de> PodDeserialize<'de> for f32 {
+    fn deserialize(
+        deserializer: PodDeserializer<'de>,
+    ) -> Result<
+        (Self, deserialize::DeserializeSuccess<'de>),
+        deserialize::DeserializeError<&'de [u8]>,
+    >
+    where
+        Self: Sized,
+    {
+        deserializer.deserialize_float(FloatVisitor)
+    }
+}
+
+impl<'de> PodDeserialize<'de> for f64 {
+    fn deserialize(
+        deserializer: PodDeserializer<'de>,
+    ) -> Result<
+        (Self, deserialize::DeserializeSuccess<'de>),
+        deserialize::DeserializeError<&'de [u8]>,
+    >
+    where
+        Self: Sized,
+    {
+        deserializer.deserialize_double(DoubleVisitor)
+    }
+}
+
+impl<'de> PodDeserialize<'de> for Rectangle {
+    fn deserialize(
+        deserializer: PodDeserializer<'de>,
+    ) -> Result<
+        (Self, deserialize::DeserializeSuccess<'de>),
+        deserialize::DeserializeError<&'de [u8]>,
+    >
+    where
+        Self: Sized,
+    {
+        deserializer.deserialize_rectangle(RectangleVisitor)
+    }
+}
+
+impl<'de> PodDeserialize<'de> for Fraction {
+    fn deserialize(
+        deserializer: PodDeserializer<'de>,
+    ) -> Result<
+        (Self, deserialize::DeserializeSuccess<'de>),
+        deserialize::DeserializeError<&'de [u8]>,
+    >
+    where
+        Self: Sized,
+    {
+        deserializer.deserialize_fraction(FractionVisitor)
+    }
+}
+
+impl<'de> PodDeserialize<'de> for Id {
+    fn deserialize(
+        deserializer: PodDeserializer<'de>,
+    ) -> Result<
+        (Self, deserialize::DeserializeSuccess<'de>),
+        deserialize::DeserializeError<&'de [u8]>,
+    >
+    where
+        Self: Sized,
+    {
+        deserializer.deserialize_id(IdVisitor)
+    }
+}
+
+impl<'de> PodDeserialize<'de> for Fd {
+    fn deserialize(
+        deserializer: PodDeserializer<'de>,
+    ) -> Result<
+        (Self, deserialize::DeserializeSuccess<'de>),
+        deserialize::DeserializeError<&'de [u8]>,
+    >
+    where
+        Self: Sized,
+    {
+        deserializer.deserialize_fd(FdVisitor)
     }
 }

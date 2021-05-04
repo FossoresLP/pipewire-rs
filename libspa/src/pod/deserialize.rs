@@ -9,7 +9,7 @@
 //! You can also implement the [`PodDeserialize`] trait on another type yourself. See the traits documentation for more
 //! information on how to do that.
 
-use std::marker::PhantomData;
+use std::{convert::Infallible, marker::PhantomData};
 
 use nom::{
     bytes::complete::{tag, take},
@@ -20,6 +20,7 @@ use nom::{
 };
 
 use super::{CanonicalFixedSizedPod, FixedSizedPod};
+use crate::utils::{Fd, Fraction, Id, Rectangle};
 
 /// Implementors of this trait can be deserialized from the raw SPA Pod format using a [`PodDeserializer`]-
 ///
@@ -33,7 +34,7 @@ use super::{CanonicalFixedSizedPod, FixedSizedPod};
 /// Deserialize a `String` pod without copying:
 /// ```rust
 /// use std::io;
-/// use libspa::pod::deserialize::{PodDeserialize, PodDeserializer, DeserializeError, DeserializeSuccess};
+/// use libspa::pod::deserialize::{PodDeserialize, PodDeserializer, DeserializeError, DeserializeSuccess, StringVisitor};
 ///
 /// struct ContainsStr<'s>(&'s str);
 ///
@@ -44,7 +45,7 @@ use super::{CanonicalFixedSizedPod, FixedSizedPod};
 ///     where
 ///         Self: Sized,
 ///     {
-///         deserializer.deserialize_str().map(|(s, success)| (ContainsStr(s), success))
+///         deserializer.deserialize_str(StringVisitor).map(|(s, success)| (ContainsStr(s), success))
 ///     }
 /// }
 /// ```
@@ -53,7 +54,9 @@ use super::{CanonicalFixedSizedPod, FixedSizedPod};
 /// Deserialize an `Array` pod with `Int` elements:
 /// ```rust
 /// use std::io;
-/// use libspa::pod::deserialize::{PodDeserialize, PodDeserializer, DeserializeError, DeserializeSuccess};
+/// use std::io::Cursor;
+/// use libspa::pod::deserialize::{PodDeserialize, PodDeserializer, DeserializeError, DeserializeSuccess, Visitor};
+/// use libspa::pod::serialize::PodSerializer;
 ///
 /// struct Numbers(Vec<i32>);
 ///
@@ -64,14 +67,21 @@ use super::{CanonicalFixedSizedPod, FixedSizedPod};
 ///     where
 ///         Self: Sized,
 ///     {
-///         let (mut array_deserializer, num_elems) = deserializer.deserialize_array()?;
-///         let mut vec = Vec::with_capacity(num_elems as usize);
-///         for _ in 0..num_elems {
-///             vec.push(array_deserializer.deserialize_element()?);
+///         struct NumbersVisitor;
+///
+///         impl<'de> Visitor<'de> for NumbersVisitor {
+///             type Value = Numbers;
+///             type ArrayElem = i32;
+///
+///             fn visit_array(
+///                 &self,
+///                 elements: Vec<Self::ArrayElem>,
+///             ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+///                 Ok(Numbers(elements))
+///             }
 ///         }
-///         array_deserializer
-///             .end()
-///             .map(|success| (Numbers(vec), success))
+///
+///         deserializer.deserialize_array(NumbersVisitor)
 ///     }
 /// }
 /// ```
@@ -79,7 +89,7 @@ use super::{CanonicalFixedSizedPod, FixedSizedPod};
 /// Make a struct deserialize from a `Struct` pod:
 /// ```rust
 /// use std::{convert::TryInto, io};
-/// use libspa::pod::deserialize::{PodDeserialize, PodDeserializer, DeserializeError, DeserializeSuccess};
+/// use libspa::pod::deserialize::{PodDeserialize, PodDeserializer, DeserializeError, DeserializeSuccess, Visitor, StructPodDeserializer};
 ///
 /// struct Animal {
 ///     name: String,
@@ -94,26 +104,34 @@ use super::{CanonicalFixedSizedPod, FixedSizedPod};
 ///     where
 ///         Self: Sized,
 ///     {
-///         let mut struct_deserializer = deserializer.deserialize_struct()?;
+///     struct AnimalVisitor;
 ///
-///         let result = Animal {
-///             name: struct_deserializer
-///                 .deserialize_field()?
-///                 .expect("Input has too few fields"),
-///             feet: struct_deserializer
-///                 .deserialize_field::<i32>()?
-///                 .expect("Input has too few fields")
-///                 .try_into()
-///                 .expect("Animal is a millipede, has too many feet for a u8."),
-///             can_fly: struct_deserializer
-///                 .deserialize_field()?
-///                 .expect("Input has too few fields"),
-///         };
+///     impl<'de> Visitor<'de> for AnimalVisitor {
+///         type Value = Animal;
+///         type ArrayElem = std::convert::Infallible;
 ///
-///         struct_deserializer
-///             .end()
-///             .map(|success| (result, success))
+///         fn visit_struct(
+///             &self,
+///             struct_deserializer: &mut StructPodDeserializer<'de>,
+///         ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+///             Ok(Animal {
+///                 name: struct_deserializer
+///                     .deserialize_field()?
+///                     .expect("Input has too few fields"),
+///                 feet: struct_deserializer
+///                     .deserialize_field::<i32>()?
+///                     .expect("Input has too few fields")
+///                     .try_into()
+///                     .expect("Animal is a millipede, has too many feet for a u8."),
+///                 can_fly: struct_deserializer
+///                     .deserialize_field()?
+///                     .expect("Input has too few fields"),
+///             })
+///         }
 ///     }
+///
+///     deserializer.deserialize_struct(AnimalVisitor)
+///    }
 /// }
 /// ```
 pub trait PodDeserialize<'de> {
@@ -133,7 +151,7 @@ impl<'de> PodDeserialize<'de> for &'de str {
     where
         Self: Sized,
     {
-        deserializer.deserialize_str()
+        deserializer.deserialize_str(StringVisitor)
     }
 }
 
@@ -146,7 +164,7 @@ impl<'de> PodDeserialize<'de> for String {
         Self: Sized,
     {
         deserializer
-            .deserialize_str()
+            .deserialize_str(StringVisitor)
             .map(|(s, success)| (s.to_owned(), success))
     }
 }
@@ -159,7 +177,7 @@ impl<'de> PodDeserialize<'de> for &'de [u8] {
     where
         Self: Sized,
     {
-        deserializer.deserialize_bytes()
+        deserializer.deserialize_bytes(BytesVisitor)
     }
 }
 
@@ -172,29 +190,22 @@ impl<'de> PodDeserialize<'de> for Vec<u8> {
         Self: Sized,
     {
         deserializer
-            .deserialize_bytes()
+            .deserialize_bytes(BytesVisitor)
             .map(|(b, success)| (b.to_owned(), success))
     }
 }
 
 // Deserialize an `Array` type pod.
-impl<'de, P: FixedSizedPod> PodDeserialize<'de> for Vec<P> {
+impl<'de, P: FixedSizedPod + CanonicalFixedSizedPod + std::marker::Copy> PodDeserialize<'de>
+    for Vec<P>
+{
     fn deserialize(
         deserializer: PodDeserializer<'de>,
     ) -> Result<(Self, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
     where
         Self: Sized,
     {
-        let (mut arr_deserializer, num_elems) = deserializer.deserialize_array::<P>()?;
-
-        let mut result = Vec::with_capacity(num_elems as usize);
-        for _ in 0..num_elems {
-            result.push(arr_deserializer.deserialize_element()?);
-        }
-
-        let success = arr_deserializer.end()?;
-
-        Ok((result, success))
+        deserializer.deserialize_array::<_, P>(VecVisitor::<P>::default())
     }
 }
 
@@ -246,7 +257,7 @@ impl<'de, 'a> PodDeserializer<'de> {
     ///
     /// Deserialization will only succeed if the [`FixedSizedPod::CanonicalType`] of the requested type matches the type
     /// of the pod.
-    pub fn deserialize_fixed_sized_pod<P: FixedSizedPod>(
+    fn deserialize_fixed_sized_pod<P: FixedSizedPod>(
         mut self,
     ) -> Result<(P, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>> {
         let padding = if 8 - (P::CanonicalType::SIZE % 8) == 8 {
@@ -266,29 +277,107 @@ impl<'de, 'a> PodDeserializer<'de> {
         .map_err(|err| err.into())
     }
 
+    /// Deserialize a `none` pod.
+    pub fn deserialize_none<V>(
+        self,
+        visitor: V,
+    ) -> Result<(V::Value, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
+    where
+        V: Visitor<'de>,
+    {
+        let res = self.deserialize_fixed_sized_pod::<()>().unwrap();
+        Ok((visitor.visit_none()?, res.1))
+    }
+
+    /// Deserialize a `boolean` pod.
+    pub fn deserialize_bool<V>(
+        self,
+        visitor: V,
+    ) -> Result<(V::Value, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
+    where
+        V: Visitor<'de>,
+    {
+        let res = self.deserialize_fixed_sized_pod()?;
+        Ok((visitor.visit_bool(res.0)?, res.1))
+    }
+
+    /// Deserialize an `int` pod.
+    pub fn deserialize_int<V>(
+        self,
+        visitor: V,
+    ) -> Result<(V::Value, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
+    where
+        V: Visitor<'de>,
+    {
+        let res = self.deserialize_fixed_sized_pod()?;
+        Ok((visitor.visit_int(res.0)?, res.1))
+    }
+
+    /// Deserialize a `long` pod.
+    pub fn deserialize_long<V>(
+        self,
+        visitor: V,
+    ) -> Result<(V::Value, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
+    where
+        V: Visitor<'de>,
+    {
+        let res = self.deserialize_fixed_sized_pod()?;
+        Ok((visitor.visit_long(res.0)?, res.1))
+    }
+
+    /// Deserialize a `float` pod.
+    pub fn deserialize_float<V>(
+        self,
+        visitor: V,
+    ) -> Result<(V::Value, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
+    where
+        V: Visitor<'de>,
+    {
+        let res = self.deserialize_fixed_sized_pod()?;
+        Ok((visitor.visit_float(res.0)?, res.1))
+    }
+
+    /// Deserialize a `double` pod.
+    pub fn deserialize_double<V>(
+        self,
+        visitor: V,
+    ) -> Result<(V::Value, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
+    where
+        V: Visitor<'de>,
+    {
+        let res = self.deserialize_fixed_sized_pod()?;
+        Ok((visitor.visit_double(res.0)?, res.1))
+    }
+
     /// Deserialize a `String` pod.
-    pub fn deserialize_str(
+    pub fn deserialize_str<V>(
         mut self,
-    ) -> Result<(&'de str, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>> {
+        visitor: V,
+    ) -> Result<(V::Value, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
+    where
+        V: Visitor<'de>,
+    {
         let len = self.parse(Self::header(spa_sys::SPA_TYPE_String))?;
         let padding = (8 - len) % 8;
-        self.parse(terminated(
+        let res = self.parse(terminated(
             map_res(terminated(take(len - 1), tag([b'\0'])), std::str::from_utf8),
             take(padding),
-        ))
-        .map(|res| (res, DeserializeSuccess(self)))
-        .map_err(|err| err.into())
+        ))?;
+        Ok((visitor.visit_string(res)?, DeserializeSuccess(self)))
     }
 
     /// Deserialize a `Bytes` pod.
-    pub fn deserialize_bytes(
+    pub fn deserialize_bytes<V>(
         mut self,
-    ) -> Result<(&'de [u8], DeserializeSuccess<'de>), DeserializeError<&'de [u8]>> {
+        visitor: V,
+    ) -> Result<(V::Value, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
+    where
+        V: Visitor<'de>,
+    {
         let len = self.parse(Self::header(spa_sys::SPA_TYPE_Bytes))?;
         let padding = (8 - len) % 8;
-        self.parse(terminated(take(len), take(padding)))
-            .map(|res| (res, DeserializeSuccess(self)))
-            .map_err(|err| err.into())
+        let res = self.parse(terminated(take(len), take(padding)))?;
+        Ok((visitor.visit_bytes(res)?, DeserializeSuccess(self)))
     }
 
     /// Start parsing an array pod containing elements of type `E`.
@@ -296,7 +385,7 @@ impl<'de, 'a> PodDeserializer<'de> {
     /// # Returns
     /// - The array deserializer and the number of elements in the array on success
     /// - An error if the header could not be parsed
-    pub fn deserialize_array<E>(
+    pub fn new_array_deserializer<E>(
         mut self,
     ) -> Result<(ArrayPodDeserializer<'de, E>, u32), DeserializeError<&'de [u8]>>
     where
@@ -328,7 +417,7 @@ impl<'de, 'a> PodDeserializer<'de> {
     ///
     /// # Errors
     /// Returns a parsing error if input does not start with a struct pod.
-    pub fn deserialize_struct(
+    fn new_struct_deserializer(
         mut self,
     ) -> Result<StructPodDeserializer<'de>, DeserializeError<&'de [u8]>> {
         let len = self.parse(Self::header(spa_sys::SPA_TYPE_Struct))?;
@@ -337,6 +426,98 @@ impl<'de, 'a> PodDeserializer<'de> {
             deserializer: Some(self),
             remaining: len,
         })
+    }
+
+    /// Deserialize a `Rectangle` pod.
+    pub fn deserialize_rectangle<V>(
+        self,
+        visitor: V,
+    ) -> Result<(V::Value, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
+    where
+        V: Visitor<'de>,
+    {
+        let res = self.deserialize_fixed_sized_pod()?;
+        Ok((visitor.visit_rectangle(res.0)?, res.1))
+    }
+
+    /// Deserialize a `Fraction` pod.
+    pub fn deserialize_fraction<V>(
+        self,
+        visitor: V,
+    ) -> Result<(V::Value, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
+    where
+        V: Visitor<'de>,
+    {
+        let res = self.deserialize_fixed_sized_pod()?;
+        Ok((visitor.visit_fraction(res.0)?, res.1))
+    }
+
+    /// Deserialize an `Id` pod.
+    pub fn deserialize_id<V>(
+        self,
+        visitor: V,
+    ) -> Result<(V::Value, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
+    where
+        V: Visitor<'de>,
+    {
+        let res = self.deserialize_fixed_sized_pod()?;
+        Ok((visitor.visit_id(res.0)?, res.1))
+    }
+
+    /// Deserialize a `Fd` pod.
+    pub fn deserialize_fd<V>(
+        self,
+        visitor: V,
+    ) -> Result<(V::Value, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
+    where
+        V: Visitor<'de>,
+    {
+        let res = self.deserialize_fixed_sized_pod()?;
+        Ok((visitor.visit_fd(res.0)?, res.1))
+    }
+
+    /// Deserialize a `Struct` pod.
+    pub fn deserialize_struct<V>(
+        self,
+        visitor: V,
+    ) -> Result<(V::Value, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
+    where
+        V: Visitor<'de>,
+    {
+        let mut struct_deserializer = self.new_struct_deserializer()?;
+        let res = visitor.visit_struct(&mut struct_deserializer)?;
+        let success = struct_deserializer.end()?;
+        Ok((res, success))
+    }
+
+    fn deserialize_array_vec<T>(
+        self,
+    ) -> Result<(Vec<T>, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
+    where
+        T: CanonicalFixedSizedPod + FixedSizedPod + std::marker::Copy,
+    {
+        let mut array_deserializer: ArrayPodDeserializer<'de, T> = self.new_array_deserializer()?.0;
+        let mut elements = Vec::with_capacity(array_deserializer.length as usize);
+        for _ in 0..array_deserializer.length {
+            elements.push(array_deserializer.deserialize_element()?);
+        }
+        let success = array_deserializer.end()?;
+
+        Ok((elements, success))
+    }
+
+    /// Deserialize an `array` pod containing elments of type `T`.
+    pub fn deserialize_array<V, T>(
+        self,
+        visitor: V,
+    ) -> Result<(V::Value, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
+    where
+        V: Visitor<'de, ArrayElem = T>,
+        T: CanonicalFixedSizedPod + FixedSizedPod + std::marker::Copy,
+    {
+        let (elements, success) = self.deserialize_array_vec::<T>()?;
+        let res = visitor.visit_array(elements)?;
+        Ok((res, success))
     }
 }
 
@@ -472,10 +653,263 @@ impl<'de> StructPodDeserializer<'de> {
 pub enum DeserializeError<I> {
     /// Parsing error
     Nom(nom::Err<nom::error::Error<I>>),
+    /// The visitor does not support the type
+    UnsupportedType,
 }
 
 impl<I> From<nom::Err<nom::error::Error<I>>> for DeserializeError<I> {
     fn from(err: nom::Err<nom::error::Error<I>>) -> Self {
         DeserializeError::Nom(err)
+    }
+}
+
+/// This trait represents a visitor is "driven" by the deserializer to construct an instance of your type.
+pub trait Visitor<'de>: Sized {
+    /// The value produced by this visitor
+    type Value;
+    /// The element type [`Visitor::visit_array`] is expecting as input.
+    /// Only used for visitors implementing this method,
+    /// [`std::convert::Infallible`] can be used as a default.
+    type ArrayElem;
+
+    /// The input contains a `none`.
+    fn visit_none(&self) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
+
+    /// The input contains a `bool`.
+    fn visit_bool(&self, _v: bool) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
+
+    /// The input contains an `i32`.
+    fn visit_int(&self, _v: i32) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
+
+    /// The input contains an `i64`.
+    fn visit_long(&self, _v: i64) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
+
+    /// The input contains an `f32`.
+    fn visit_float(&self, _v: f32) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
+
+    /// The input contains an `f64`.
+    fn visit_double(&self, _v: f64) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
+
+    /// The input contains a string.
+    fn visit_string(&self, _v: &'de str) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
+
+    /// The input contains a bytes array.
+    fn visit_bytes(&self, _v: &'de [u8]) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
+
+    /// The input contains a [`Rectangle`].
+    fn visit_rectangle(&self, _v: Rectangle) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
+
+    /// The input contains a [`Fraction`].
+    fn visit_fraction(&self, _v: Fraction) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
+
+    /// The input contains an [`Id`].
+    fn visit_id(&self, _v: Id) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
+
+    /// The input contains an [`Fd`].
+    fn visit_fd(&self, _v: Fd) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
+
+    /// The input contains a structure.
+    fn visit_struct(
+        &self,
+        _struct_deserializer: &mut StructPodDeserializer<'de>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
+
+    /// The input contains an array.
+    fn visit_array(
+        &self,
+        _elements: Vec<Self::ArrayElem>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
+}
+
+/// A visitor producing `()` for none values.
+pub struct NoneVisitor;
+
+impl<'de> Visitor<'de> for NoneVisitor {
+    type Value = ();
+    type ArrayElem = Infallible;
+
+    fn visit_none(&self) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(())
+    }
+}
+
+/// A visitor producing [`bool`] for boolean values.
+pub struct BoolVisitor;
+
+impl<'de> Visitor<'de> for BoolVisitor {
+    type Value = bool;
+    type ArrayElem = Infallible;
+
+    fn visit_bool(&self, v: bool) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(v)
+    }
+}
+
+/// A visitor producing [`i32`] for integer values.
+pub struct IntVisitor;
+
+impl<'de> Visitor<'de> for IntVisitor {
+    type Value = i32;
+    type ArrayElem = Infallible;
+
+    fn visit_int(&self, v: i32) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(v)
+    }
+}
+
+/// A visitor producing [`i64`] for long values.
+pub struct LongVisitor;
+
+impl<'de> Visitor<'de> for LongVisitor {
+    type Value = i64;
+    type ArrayElem = Infallible;
+
+    fn visit_long(&self, v: i64) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(v)
+    }
+}
+
+/// A visitor producing [`f32`] for float values.
+pub struct FloatVisitor;
+
+impl<'de> Visitor<'de> for FloatVisitor {
+    type Value = f32;
+    type ArrayElem = Infallible;
+
+    fn visit_float(&self, v: f32) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(v)
+    }
+}
+
+/// A visitor producing [`f64`] for double values.
+pub struct DoubleVisitor;
+
+impl<'de> Visitor<'de> for DoubleVisitor {
+    type Value = f64;
+    type ArrayElem = Infallible;
+
+    fn visit_double(&self, v: f64) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(v)
+    }
+}
+
+/// A visitor producing [`&str`] for string values.
+pub struct StringVisitor;
+
+impl<'de> Visitor<'de> for StringVisitor {
+    type Value = &'de str;
+    type ArrayElem = Infallible;
+
+    fn visit_string(&self, v: &'de str) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(v)
+    }
+}
+
+/// A visitor producing [`&[u8]`] for bytes values.
+pub struct BytesVisitor;
+
+impl<'de> Visitor<'de> for BytesVisitor {
+    type Value = &'de [u8];
+    type ArrayElem = Infallible;
+
+    fn visit_bytes(&self, v: &'de [u8]) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(v)
+    }
+}
+
+/// A visitor producing [`Rectangle`] for rectangle values.
+pub struct RectangleVisitor;
+
+impl<'de> Visitor<'de> for RectangleVisitor {
+    type Value = Rectangle;
+    type ArrayElem = Infallible;
+
+    fn visit_rectangle(&self, v: Rectangle) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(v)
+    }
+}
+
+/// A visitor producing [`Fraction`] for fraction values.
+pub struct FractionVisitor;
+
+impl<'de> Visitor<'de> for FractionVisitor {
+    type Value = Fraction;
+    type ArrayElem = Infallible;
+
+    fn visit_fraction(&self, v: Fraction) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(v)
+    }
+}
+
+/// A visitor producing [`Id`] for ID values.
+pub struct IdVisitor;
+
+impl<'de> Visitor<'de> for IdVisitor {
+    type Value = Id;
+    type ArrayElem = Infallible;
+
+    fn visit_id(&self, v: Id) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(v)
+    }
+}
+
+/// A visitor producing [`Fd`] for file descriptor values.
+pub struct FdVisitor;
+
+impl<'de> Visitor<'de> for FdVisitor {
+    type Value = Fd;
+    type ArrayElem = Infallible;
+
+    fn visit_fd(&self, v: Fd) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(v)
+    }
+}
+/// A visitor producing [`Vec`] for array values.
+pub struct VecVisitor<E: FixedSizedPod> {
+    _phantom: PhantomData<E>,
+}
+
+impl<E: FixedSizedPod> Default for VecVisitor<E> {
+    fn default() -> Self {
+        Self {
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<'de, E: CanonicalFixedSizedPod + std::marker::Copy> Visitor<'de> for VecVisitor<E> {
+    type Value = Vec<E>;
+    type ArrayElem = E;
+
+    fn visit_array(&self, elements: Vec<E>) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(elements)
     }
 }

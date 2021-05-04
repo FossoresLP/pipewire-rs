@@ -1,7 +1,9 @@
 use libspa::{
     pod::deserialize::PodDeserializer,
     pod::{
-        deserialize::{DeserializeError, DeserializeSuccess, PodDeserialize},
+        deserialize::{
+            DeserializeError, DeserializeSuccess, PodDeserialize, StructPodDeserializer, Visitor,
+        },
         serialize::{PodSerialize, PodSerializer, SerializeSuccess},
         CanonicalFixedSizedPod,
     },
@@ -550,23 +552,31 @@ impl<'a, 'de> PodDeserialize<'de> for TestStruct<'de> {
     where
         Self: Sized,
     {
-        let mut struct_deserializer = deserializer.deserialize_struct()?;
+        struct TestVisitor;
 
-        let result = TestStruct {
-            int: struct_deserializer
-                .deserialize_field()?
-                .expect("Input has too few fields"),
-            string: struct_deserializer
-                .deserialize_field()?
-                .expect("Input has too few fields"),
-            nested: struct_deserializer
-                .deserialize_field()?
-                .expect("Input has too few fields"),
-        };
+        impl<'de> Visitor<'de> for TestVisitor {
+            type Value = TestStruct<'de>;
+            type ArrayElem = std::convert::Infallible;
 
-        let success = struct_deserializer.end()?;
+            fn visit_struct(
+                &self,
+                struct_deserializer: &mut StructPodDeserializer<'de>,
+            ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+                Ok(TestStruct {
+                    int: struct_deserializer
+                        .deserialize_field()?
+                        .expect("Input has too few fields"),
+                    string: struct_deserializer
+                        .deserialize_field()?
+                        .expect("Input has too few fields"),
+                    nested: struct_deserializer
+                        .deserialize_field()?
+                        .expect("Input has too few fields"),
+                })
+            }
+        }
 
-        Ok((result, success))
+        deserializer.deserialize_struct(TestVisitor)
     }
 }
 
@@ -577,17 +587,25 @@ impl<'a, 'de> PodDeserialize<'de> for NestedStruct {
     where
         Self: Sized,
     {
-        let mut struct_deserializer = deserializer.deserialize_struct()?;
+        struct NestedVisitor;
 
-        let result = NestedStruct {
-            rect: struct_deserializer
-                .deserialize_field()?
-                .expect("Input has too few fields"),
-        };
+        impl<'de> Visitor<'de> for NestedVisitor {
+            type Value = NestedStruct;
+            type ArrayElem = std::convert::Infallible;
 
-        let success = struct_deserializer.end()?;
+            fn visit_struct(
+                &self,
+                struct_deserializer: &mut StructPodDeserializer<'de>,
+            ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+                Ok(NestedStruct {
+                    rect: struct_deserializer
+                        .deserialize_field()?
+                        .expect("Input has too few fields"),
+                })
+            }
+        }
 
-        Ok((result, success))
+        deserializer.deserialize_struct(NestedVisitor)
     }
 }
 
