@@ -1,3 +1,68 @@
+// Copyright The pipewire-rs Contributors.
+// SPDX-License-Identifier: MIT
+
+//! This module provides a channel for communicating with a thread running a pipewire loop.
+//! The channel is split into two types, [`Sender`] and [`Receiver`].
+//!
+//! It can be created using the [`channel`] function.
+//! The returned receiver can then be attached to a pipewire loop, and the sender can be used to send messages to
+//! the receiver.
+//!
+//! # Examples
+//! This program will print "Hello" three times before terminating, using two threads:
+// ignored because https://gitlab.freedesktop.org/pipewire/pipewire-rs/-/issues/19
+//! ```no_run
+//! use std::{time::Duration, sync::mpsc, thread};
+//! use pipewire::{MainLoop, Loop};
+//!
+//! // Our message to the pipewire loop, this tells it to terminate.
+//! struct Terminate;
+//!
+//! fn main() {
+//!     let (main_sender, main_receiver) = mpsc::channel();
+//!     let (pw_sender, pw_receiver) = pipewire::channel::channel();
+//!
+//!     let pw_thread = thread::spawn(move || pw_thread(main_sender, pw_receiver));
+//!
+//!     // Count up to three "Hello"'s.
+//!     let mut n = 0;
+//!     while n < 3 {
+//!         println!("{}", main_receiver.recv().unwrap());
+//!         n += 1;
+//!     }
+//!
+//!     // We printed hello 3 times, terminate the pipewire thread now.
+//!     pw_sender.send(Terminate);
+//!
+//!     pw_thread.join();
+//! }
+//!
+//! // This is the code that will run in the pipewire thread.
+//! fn pw_thread(
+//!     main_sender: mpsc::Sender<String>,
+//!     pw_receiver: pipewire::channel::Receiver<Terminate>
+//! ) {
+//!     let mainloop = MainLoop::new().expect("Failed to create main loop");
+//!
+//!     // When we receive a `Terminate` message, quit the main loop.
+//!     let _receiver = pw_receiver.attach(&mainloop, {
+//!         let mainloop = mainloop.clone();
+//!         move |_| mainloop.quit()
+//!     });
+//!
+//!     // Every 100ms, send `"Hello"` to the main thread.
+//!     let timer = mainloop.add_timer(move |_| {
+//!         main_sender.send(String::from("Hello"));
+//!     });
+//!     timer.update_timer(
+//!         Some(Duration::from_millis(1)), // Send the first message immediately
+//!         Some(Duration::from_millis(100))
+//!     );
+//!
+//!     mainloop.run();
+//! }
+//! ```
+
 use std::{
     collections::VecDeque,
     ffi::c_void,
