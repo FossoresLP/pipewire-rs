@@ -353,8 +353,8 @@ pub struct ArrayPodDeserializer<'de, E: FixedSizedPod> {
     length: u32,
     // The number of elements that have been deserialized so far.
     deserialized: u32,
-    /// The struct has the type parameter P to ensure all deserialized elements are the same type,
-    /// but doesn't actually own any P, so we need the `PhantomData<P>` instead.
+    /// The struct has the type parameter E to ensure all deserialized elements are the same type,
+    /// but doesn't actually own any E, so we need the `PhantomData<E>` instead.
     _phantom: PhantomData<E>,
 }
 
