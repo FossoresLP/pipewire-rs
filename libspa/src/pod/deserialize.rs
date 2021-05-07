@@ -385,7 +385,7 @@ impl<'de, E: FixedSizedPod> ArrayPodDeserializer<'de, E> {
     ) -> Result<DeserializeSuccess<'de>, nom::Err<nom::error::Error<&'de [u8]>>> {
         assert!(
             self.length == self.deserialized,
-            "Not all fields were deserialized from the struct pod"
+            "Not all fields were deserialized from the array pod"
         );
 
         // Deserialize remaining padding bytes.
