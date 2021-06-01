@@ -33,14 +33,14 @@ use super::{CanonicalFixedSizedPod, FixedSizedPod};
 /// Deserialize a `String` pod without copying:
 /// ```rust
 /// use std::io;
-/// use libspa::pod::deserialize::{PodDeserialize, PodDeserializer, DeserializeSuccess};
+/// use libspa::pod::deserialize::{PodDeserialize, PodDeserializer, DeserializeError, DeserializeSuccess};
 ///
 /// struct ContainsStr<'s>(&'s str);
 ///
 /// impl<'de> PodDeserialize<'de> for ContainsStr<'de> {
 ///     fn deserialize(
 ///         deserializer: PodDeserializer<'de>,
-///     ) -> Result<(Self, DeserializeSuccess<'de>), nom::Err<nom::error::Error<&'de [u8]>>>
+///     ) -> Result<(Self, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
 ///     where
 ///         Self: Sized,
 ///     {
@@ -53,14 +53,14 @@ use super::{CanonicalFixedSizedPod, FixedSizedPod};
 /// Deserialize an `Array` pod with `Int` elements:
 /// ```rust
 /// use std::io;
-/// use libspa::pod::deserialize::{PodDeserialize, PodDeserializer, DeserializeSuccess};
+/// use libspa::pod::deserialize::{PodDeserialize, PodDeserializer, DeserializeError, DeserializeSuccess};
 ///
 /// struct Numbers(Vec<i32>);
 ///
 /// impl<'de> PodDeserialize<'de> for Numbers {
 ///     fn deserialize(
 ///         deserializer: PodDeserializer<'de>,
-///     ) -> Result<(Self, DeserializeSuccess<'de>), nom::Err<nom::error::Error<&'de [u8]>>>
+///     ) -> Result<(Self, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
 ///     where
 ///         Self: Sized,
 ///     {
@@ -79,7 +79,7 @@ use super::{CanonicalFixedSizedPod, FixedSizedPod};
 /// Make a struct deserialize from a `Struct` pod:
 /// ```rust
 /// use std::{convert::TryInto, io};
-/// use libspa::pod::deserialize::{PodDeserialize, PodDeserializer, DeserializeSuccess};
+/// use libspa::pod::deserialize::{PodDeserialize, PodDeserializer, DeserializeError, DeserializeSuccess};
 ///
 /// struct Animal {
 ///     name: String,
@@ -90,7 +90,7 @@ use super::{CanonicalFixedSizedPod, FixedSizedPod};
 /// impl<'de> PodDeserialize<'de> for Animal {
 ///     fn deserialize(
 ///         deserializer: PodDeserializer<'de>,
-///     ) -> Result<(Self, DeserializeSuccess<'de>), nom::Err<nom::error::Error<&'de [u8]>>>
+///     ) -> Result<(Self, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
 ///     where
 ///         Self: Sized,
 ///     {
@@ -120,7 +120,7 @@ pub trait PodDeserialize<'de> {
     /// Deserialize the type by using the provided [`PodDeserializer`]
     fn deserialize(
         deserializer: PodDeserializer<'de>,
-    ) -> Result<(Self, DeserializeSuccess<'de>), nom::Err<nom::error::Error<&'de [u8]>>>
+    ) -> Result<(Self, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
     where
         Self: Sized;
 }
@@ -129,7 +129,7 @@ pub trait PodDeserialize<'de> {
 impl<'de> PodDeserialize<'de> for &'de str {
     fn deserialize(
         deserializer: PodDeserializer<'de>,
-    ) -> Result<(Self, DeserializeSuccess<'de>), nom::Err<nom::error::Error<&'de [u8]>>>
+    ) -> Result<(Self, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
     where
         Self: Sized,
     {
@@ -141,7 +141,7 @@ impl<'de> PodDeserialize<'de> for &'de str {
 impl<'de> PodDeserialize<'de> for String {
     fn deserialize(
         deserializer: PodDeserializer<'de>,
-    ) -> Result<(Self, DeserializeSuccess<'de>), nom::Err<nom::error::Error<&'de [u8]>>>
+    ) -> Result<(Self, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
     where
         Self: Sized,
     {
@@ -155,7 +155,7 @@ impl<'de> PodDeserialize<'de> for String {
 impl<'de> PodDeserialize<'de> for &'de [u8] {
     fn deserialize(
         deserializer: PodDeserializer<'de>,
-    ) -> Result<(Self, DeserializeSuccess<'de>), nom::Err<nom::error::Error<&'de [u8]>>>
+    ) -> Result<(Self, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
     where
         Self: Sized,
     {
@@ -167,7 +167,7 @@ impl<'de> PodDeserialize<'de> for &'de [u8] {
 impl<'de> PodDeserialize<'de> for Vec<u8> {
     fn deserialize(
         deserializer: PodDeserializer<'de>,
-    ) -> Result<(Self, DeserializeSuccess<'de>), nom::Err<nom::error::Error<&'de [u8]>>>
+    ) -> Result<(Self, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
     where
         Self: Sized,
     {
@@ -181,7 +181,7 @@ impl<'de> PodDeserialize<'de> for Vec<u8> {
 impl<'de, P: FixedSizedPod> PodDeserialize<'de> for Vec<P> {
     fn deserialize(
         deserializer: PodDeserializer<'de>,
-    ) -> Result<(Self, DeserializeSuccess<'de>), nom::Err<nom::error::Error<&'de [u8]>>>
+    ) -> Result<(Self, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
     where
         Self: Sized,
     {
@@ -219,10 +219,9 @@ impl<'de, 'a> PodDeserializer<'de> {
     ///
     /// The remaining input and the type on success,
     /// or an error that specifies where parsing failed.
-    #[allow(clippy::clippy::type_complexity)]
     pub fn deserialize_from<P: PodDeserialize<'de>>(
         input: &'de [u8],
-    ) -> Result<(&'de [u8], P), nom::Err<nom::error::Error<&'de [u8]>>> {
+    ) -> Result<(&'de [u8], P), DeserializeError<&'de [u8]>> {
         let deserializer = Self { input };
         P::deserialize(deserializer).map(|(res, success)| (success.0.input, res))
     }
@@ -249,7 +248,7 @@ impl<'de, 'a> PodDeserializer<'de> {
     /// of the pod.
     pub fn deserialize_fixed_sized_pod<P: FixedSizedPod>(
         mut self,
-    ) -> Result<(P, DeserializeSuccess<'de>), nom::Err<nom::error::Error<&'de [u8]>>> {
+    ) -> Result<(P, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>> {
         let padding = if 8 - (P::CanonicalType::SIZE % 8) == 8 {
             0
         } else {
@@ -264,12 +263,13 @@ impl<'de, 'a> PodDeserializer<'de> {
             take(padding),
         ))
         .map(|res| (res, DeserializeSuccess(self)))
+        .map_err(|err| err.into())
     }
 
     /// Deserialize a `String` pod.
     pub fn deserialize_str(
         mut self,
-    ) -> Result<(&'de str, DeserializeSuccess<'de>), nom::Err<nom::error::Error<&'de [u8]>>> {
+    ) -> Result<(&'de str, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>> {
         let len = self.parse(Self::header(spa_sys::SPA_TYPE_String))?;
         let padding = (8 - len) % 8;
         self.parse(terminated(
@@ -277,17 +277,18 @@ impl<'de, 'a> PodDeserializer<'de> {
             take(padding),
         ))
         .map(|res| (res, DeserializeSuccess(self)))
+        .map_err(|err| err.into())
     }
 
     /// Deserialize a `Bytes` pod.
-    #[allow(clippy::clippy::type_complexity)]
     pub fn deserialize_bytes(
         mut self,
-    ) -> Result<(&'de [u8], DeserializeSuccess<'de>), nom::Err<nom::error::Error<&'de [u8]>>> {
+    ) -> Result<(&'de [u8], DeserializeSuccess<'de>), DeserializeError<&'de [u8]>> {
         let len = self.parse(Self::header(spa_sys::SPA_TYPE_Bytes))?;
         let padding = (8 - len) % 8;
         self.parse(terminated(take(len), take(padding)))
             .map(|res| (res, DeserializeSuccess(self)))
+            .map_err(|err| err.into())
     }
 
     /// Start parsing an array pod containing elements of type `E`.
@@ -295,10 +296,9 @@ impl<'de, 'a> PodDeserializer<'de> {
     /// # Returns
     /// - The array deserializer and the number of elements in the array on success
     /// - An error if the header could not be parsed
-    #[allow(clippy::type_complexity)] // Return type cannot be reasonably made smaller.
     pub fn deserialize_array<E>(
         mut self,
-    ) -> Result<(ArrayPodDeserializer<'de, E>, u32), nom::Err<nom::error::Error<&'de [u8]>>>
+    ) -> Result<(ArrayPodDeserializer<'de, E>, u32), DeserializeError<&'de [u8]>>
     where
         E: FixedSizedPod,
     {
@@ -330,7 +330,7 @@ impl<'de, 'a> PodDeserializer<'de> {
     /// Returns a parsing error if input does not start with a struct pod.
     pub fn deserialize_struct(
         mut self,
-    ) -> Result<StructPodDeserializer<'de>, nom::Err<nom::error::Error<&'de [u8]>>> {
+    ) -> Result<StructPodDeserializer<'de>, DeserializeError<&'de [u8]>> {
         let len = self.parse(Self::header(spa_sys::SPA_TYPE_Struct))?;
 
         Ok(StructPodDeserializer {
@@ -363,7 +363,7 @@ impl<'de, E: FixedSizedPod> ArrayPodDeserializer<'de, E> {
     ///
     /// # Panics
     /// Panics if there are no elements left to deserialize.
-    pub fn deserialize_element(&mut self) -> Result<E, nom::Err<nom::error::Error<&'de [u8]>>> {
+    pub fn deserialize_element(&mut self) -> Result<E, DeserializeError<&'de [u8]>> {
         if !self.deserialized < self.length {
             panic!("No elements left in the pod to deserialize");
         }
@@ -371,7 +371,9 @@ impl<'de, E: FixedSizedPod> ArrayPodDeserializer<'de, E> {
         let result = self
             .deserializer
             .parse(|input| E::CanonicalType::deserialize_body(input))
-            .map(|res| E::from_canonical_type(&res));
+            .map(|res| E::from_canonical_type(&res))
+            .map_err(|err| err.into());
+
         self.deserialized += 1;
         result
     }
@@ -380,9 +382,7 @@ impl<'de, E: FixedSizedPod> ArrayPodDeserializer<'de, E> {
     ///
     /// # Panics
     /// Panics if not all elements of the array were deserialized.
-    pub fn end(
-        mut self,
-    ) -> Result<DeserializeSuccess<'de>, nom::Err<nom::error::Error<&'de [u8]>>> {
+    pub fn end(mut self) -> Result<DeserializeSuccess<'de>, DeserializeError<&'de [u8]>> {
         assert!(
             self.length == self.deserialized,
             "Not all fields were deserialized from the array pod"
@@ -425,7 +425,7 @@ impl<'de> StructPodDeserializer<'de> {
     /// Returns `Some` when a field was successfully deserialized and `None` when all fields have been read.
     pub fn deserialize_field<P: PodDeserialize<'de>>(
         &mut self,
-    ) -> Result<Option<P>, nom::Err<nom::error::Error<&'de [u8]>>> {
+    ) -> Result<Option<P>, DeserializeError<&'de [u8]>> {
         if self.remaining == 0 {
             Ok(None)
         } else {
@@ -453,7 +453,7 @@ impl<'de> StructPodDeserializer<'de> {
     ///
     /// # Panics
     /// Panics if not all fields of the pod have been deserialized.
-    pub fn end(self) -> Result<DeserializeSuccess<'de>, nom::Err<nom::error::Error<&'de [u8]>>> {
+    pub fn end(self) -> Result<DeserializeSuccess<'de>, DeserializeError<&'de [u8]>> {
         assert!(
             self.remaining == 0,
             "Not all fields have been deserialized from the struct"
@@ -464,5 +464,18 @@ impl<'de> StructPodDeserializer<'de> {
         Ok(DeserializeSuccess(self.deserializer.expect(
             "StructPodDeserializer does not contain a deserializer",
         )))
+    }
+}
+
+#[derive(Debug, PartialEq)]
+/// Represent an error raised when deserializing a pod
+pub enum DeserializeError<I> {
+    /// Parsing error
+    Nom(nom::Err<nom::error::Error<I>>),
+}
+
+impl<I> From<nom::Err<nom::error::Error<I>>> for DeserializeError<I> {
+    fn from(err: nom::Err<nom::error::Error<I>>) -> Self {
+        DeserializeError::Nom(err)
     }
 }

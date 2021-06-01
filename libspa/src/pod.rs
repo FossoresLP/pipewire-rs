@@ -324,7 +324,10 @@ impl<T: FixedSizedPod> PodSerialize for T {
 impl<'de, T: FixedSizedPod> PodDeserialize<'de> for T {
     fn deserialize(
         deserializer: PodDeserializer<'de>,
-    ) -> Result<(Self, deserialize::DeserializeSuccess<'de>), nom::Err<nom::error::Error<&'de [u8]>>>
+    ) -> Result<
+        (Self, deserialize::DeserializeSuccess<'de>),
+        deserialize::DeserializeError<&'de [u8]>,
+    >
     where
         Self: Sized,
     {

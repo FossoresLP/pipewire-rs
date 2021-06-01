@@ -1,7 +1,7 @@
 use libspa::{
     pod::deserialize::PodDeserializer,
     pod::{
-        deserialize::{DeserializeSuccess, PodDeserialize},
+        deserialize::{DeserializeError, DeserializeSuccess, PodDeserialize},
         serialize::{PodSerialize, PodSerializer, SerializeSuccess},
         CanonicalFixedSizedPod,
     },
@@ -546,7 +546,7 @@ impl PodSerialize for NestedStruct {
 impl<'a, 'de> PodDeserialize<'de> for TestStruct<'de> {
     fn deserialize(
         deserializer: PodDeserializer<'de>,
-    ) -> Result<(Self, DeserializeSuccess<'de>), nom::Err<nom::error::Error<&'de [u8]>>>
+    ) -> Result<(Self, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
     where
         Self: Sized,
     {
@@ -573,7 +573,7 @@ impl<'a, 'de> PodDeserialize<'de> for TestStruct<'de> {
 impl<'a, 'de> PodDeserialize<'de> for NestedStruct {
     fn deserialize(
         deserializer: PodDeserializer<'de>,
-    ) -> Result<(Self, DeserializeSuccess<'de>), nom::Err<nom::error::Error<&'de [u8]>>>
+    ) -> Result<(Self, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
     where
         Self: Sized,
     {
