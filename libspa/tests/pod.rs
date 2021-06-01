@@ -445,7 +445,7 @@ fn fraction() {
 
 #[test]
 #[cfg_attr(miri, ignore)]
-fn array() {
+fn array_i32() {
     // 3 elements, so the resulting array has 4 bytes padding.
     let array: Vec<i32> = vec![10, 15, 19];
 
