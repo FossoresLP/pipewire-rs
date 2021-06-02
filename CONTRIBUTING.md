@@ -5,7 +5,7 @@ bug reports or general feedback.
 
 This document aims to provide some guidance if you are thinking of making a contribution.
 
-If you need help, feel free to open an issue or reach out via IRC at `#pipewire-rs` on [Freenode](https://freenode.net).
+If you need help, feel free to open an issue or reach out via IRC at `#pipewire-rs` on [OFTC](https://www.oftc.net/).
 
 # Submitting Code
 
