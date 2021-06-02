@@ -663,7 +663,7 @@ fn fd() {
         .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 16];
     assert_eq!(
-        unsafe { c::build_fd(vec_c.as_mut_ptr(), vec_c.len(), fd.0.into()) },
+        unsafe { c::build_fd(vec_c.as_mut_ptr(), vec_c.len(), fd.0) },
         0
     );
 

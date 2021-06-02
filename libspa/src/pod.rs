@@ -10,10 +10,7 @@
 pub mod deserialize;
 pub mod serialize;
 
-use std::{
-    convert::TryInto,
-    io::{Seek, Write},
-};
+use std::io::{Seek, Write};
 
 use cookie_factory::{
     bytes::{ne_f32, ne_f64, ne_i32, ne_i64, ne_u32},
@@ -251,16 +248,14 @@ impl CanonicalFixedSizedPod for Fd {
     const SIZE: u32 = 8;
 
     fn serialize_body<O: Write>(&self, out: O) -> Result<O, GenError> {
-        gen_simple(ne_i64(self.0.into()), out)
+        gen_simple(ne_i64(self.0), out)
     }
 
     fn deserialize_body(input: &[u8]) -> IResult<&[u8], Self>
     where
         Self: Sized,
     {
-        map(i64(Endianness::Native), |fd| {
-            Fd(fd.try_into().expect("fd can't be casted to i32"))
-        })(input)
+        map(i64(Endianness::Native), Fd)(input)
     }
 }
 
