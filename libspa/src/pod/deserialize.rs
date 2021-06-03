@@ -15,12 +15,15 @@ use nom::{
     bytes::complete::{tag, take},
     combinator::{map, map_res, verify},
     number::{complete::u32, Endianness},
-    sequence::{delimited, preceded, terminated},
+    sequence::{delimited, pair, preceded, terminated},
     IResult,
 };
 
-use super::{CanonicalFixedSizedPod, FixedSizedPod, Value, ValueArray};
-use crate::utils::{Fd, Fraction, Id, Rectangle};
+use super::{CanonicalFixedSizedPod, FixedSizedPod, Object, PropertyFlags, Value, ValueArray};
+use crate::{
+    pod::Property,
+    utils::{Fd, Fraction, Id, Rectangle},
+};
 
 /// Implementors of this trait can be deserialized from the raw SPA Pod format using a [`PodDeserializer`]-
 ///
@@ -441,6 +444,25 @@ impl<'de, 'a> PodDeserializer<'de> {
         })
     }
 
+    /// Start parsing an object pod.
+    ///
+    /// # Errors
+    /// Returns a parsing error if input does not start with an object pod.
+    fn new_object_deserializer(
+        mut self,
+    ) -> Result<ObjectPodDeserializer<'de>, DeserializeError<&'de [u8]>> {
+        let len = self.parse(Self::header(spa_sys::SPA_TYPE_Object))?;
+        let (object_type, object_id) =
+            self.parse(pair(u32(Endianness::Native), u32(Endianness::Native)))?;
+
+        Ok(ObjectPodDeserializer {
+            deserializer: Some(self),
+            remaining: len - 8,
+            object_type,
+            object_id,
+        })
+    }
+
     /// Deserialize a `Rectangle` pod.
     pub fn deserialize_rectangle<V>(
         self,
@@ -533,6 +555,20 @@ impl<'de, 'a> PodDeserializer<'de> {
         Ok((res, success))
     }
 
+    /// Deserialize an `Object` pod.
+    pub fn deserialize_object<V>(
+        self,
+        visitor: V,
+    ) -> Result<(V::Value, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
+    where
+        V: Visitor<'de>,
+    {
+        let mut obj_deserializer = self.new_object_deserializer()?;
+        let res = visitor.visit_object(&mut obj_deserializer)?;
+        let success = obj_deserializer.end()?;
+        Ok((res, success))
+    }
+
     /// Deserialize any kind of pod using a visitor producing [`Value`].
     pub fn deserialize_any(
         self,
@@ -554,6 +590,7 @@ impl<'de, 'a> PodDeserializer<'de> {
             spa_sys::SPA_TYPE_Fd => self.deserialize_fd(ValueVisitor),
             spa_sys::SPA_TYPE_Struct => self.deserialize_struct(ValueVisitor),
             spa_sys::SPA_TYPE_Array => self.deserialize_array_any(),
+            spa_sys::SPA_TYPE_Object => self.deserialize_object(ValueVisitor),
             _ => Err(DeserializeError::InvalidType),
         }
     }
@@ -755,6 +792,100 @@ impl<'de> StructPodDeserializer<'de> {
     }
 }
 
+/// This struct handles deserializing objects.
+///
+/// It can be obtained by calling [`PodDeserializer::deserialize_object`].
+///
+/// Properties of the object must be deserialized using its [`deserialize_property`](`Self::deserialize_property`)
+/// until it returns `None`.
+/// followed by calling its [`end`](`Self::end`) function to finish deserialization of the object.
+pub struct ObjectPodDeserializer<'de> {
+    /// The deserializer is saved in an option, but can be expected to always be a `Some`
+    /// when `deserialize_property()` or `end()` is called.
+    ///
+    /// `deserialize_property()` `take()`s the deserializer, uses it to deserialize the property,
+    /// and then puts the deserializer back inside.
+    deserializer: Option<PodDeserializer<'de>>,
+    /// Remaining object pod body length in bytes
+    remaining: u32,
+    /// type of the object
+    object_type: u32,
+    /// id of the object
+    object_id: u32,
+}
+
+impl<'de> ObjectPodDeserializer<'de> {
+    /// Deserialize a single property of the object.
+    ///
+    /// Returns `Some` when a property was successfully deserialized and `None` when all properties have been read.
+    #[allow(clippy::type_complexity)]
+    pub fn deserialize_property<P: PodDeserialize<'de>>(
+        &mut self,
+    ) -> Result<Option<(P, u32, PropertyFlags)>, DeserializeError<&'de [u8]>> {
+        if self.remaining == 0 {
+            Ok(None)
+        } else {
+            let mut deserializer = self
+                .deserializer
+                .take()
+                .expect("ObjectPodDeserializer does not contain a deserializer");
+
+            // The amount of input bytes remaining before deserializing the element.
+            let remaining_input_len = deserializer.input.len();
+
+            let key = deserializer.parse(u32(Endianness::Native))?;
+            let flags = deserializer.parse(u32(Endianness::Native))?;
+
+            let flags = PropertyFlags::from_bits_truncate(flags);
+            let (res, success) = P::deserialize(deserializer)?;
+
+            // The amount of bytes deserialized is the length of the remaining input
+            // minus the length of the remaining input now.
+            self.remaining -= remaining_input_len as u32 - success.0.input.len() as u32;
+
+            self.deserializer = Some(success.0);
+
+            Ok(Some((res, key, flags)))
+        }
+    }
+
+    /// Variant of [`Self::deserialize_property`] ensuring the property has a given key.
+    ///
+    /// Returns [`DeserializeError::PropertyMissing`] if the property is missing
+    /// and [`DeserializeError::PropertyWrongKey`] if the property does not have the
+    /// expected key.
+    pub fn deserialize_property_key<P: PodDeserialize<'de>>(
+        &mut self,
+        key: u32,
+    ) -> Result<(P, PropertyFlags), DeserializeError<&'de [u8]>> {
+        let (prop, k, flags) = self
+            .deserialize_property()?
+            .ok_or(DeserializeError::PropertyMissing)?;
+
+        if k != key {
+            Err(DeserializeError::PropertyWrongKey(k))
+        } else {
+            Ok((prop, flags))
+        }
+    }
+
+    /// Finish deserialization of the pod.
+    ///
+    /// # Panics
+    /// Panics if not all properties of the pod have been deserialized.
+    pub fn end(self) -> Result<DeserializeSuccess<'de>, DeserializeError<&'de [u8]>> {
+        assert!(
+            self.remaining == 0,
+            "Not all properties have been deserialized from the object"
+        );
+
+        // No padding parsing needed: Last field will already end aligned.
+
+        Ok(DeserializeSuccess(self.deserializer.expect(
+            "ObjectPodDeserializer does not contain a deserializer",
+        )))
+    }
+}
 #[derive(Debug, PartialEq)]
 /// Represent an error raised when deserializing a pod
 pub enum DeserializeError<I> {
@@ -764,6 +895,10 @@ pub enum DeserializeError<I> {
     UnsupportedType,
     /// The type is either invalid or not yet supported
     InvalidType,
+    /// The property is missing from the object
+    PropertyMissing,
+    /// The property does not have the expected key
+    PropertyWrongKey(u32),
 }
 
 impl<I> From<nom::Err<nom::error::Error<I>>> for DeserializeError<I> {
@@ -853,6 +988,14 @@ pub trait Visitor<'de>: Sized {
     fn visit_array(
         &self,
         _elements: Vec<Self::ArrayElem>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
+
+    /// The input contains an object.
+    fn visit_object(
+        &self,
+        _object_deserializer: &mut ObjectPodDeserializer<'de>,
     ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
         Err(DeserializeError::UnsupportedType)
     }
@@ -1089,6 +1232,26 @@ impl<'de> Visitor<'de> for ValueVisitor {
         }
 
         Ok(Value::Struct(res))
+    }
+
+    fn visit_object(
+        &self,
+        object_deserializer: &mut ObjectPodDeserializer<'de>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        let mut properties = Vec::new();
+
+        while let Some((value, key, flags)) = object_deserializer.deserialize_property()? {
+            let prop = Property { key, flags, value };
+            properties.push(prop);
+        }
+
+        let object = Object {
+            type_: object_deserializer.object_type,
+            id: object_deserializer.object_id,
+            properties,
+        };
+
+        Ok(Value::Object(object))
     }
 }
 

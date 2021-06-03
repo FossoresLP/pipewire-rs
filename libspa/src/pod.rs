@@ -12,6 +12,7 @@ pub mod serialize;
 
 use std::io::{Seek, Write};
 
+use bitflags::bitflags;
 use cookie_factory::{
     bytes::{ne_f32, ne_f64, ne_i32, ne_i64, ne_u32},
     gen_simple,
@@ -506,6 +507,8 @@ pub enum Value {
     ValueArray(ValueArray),
     /// a collection of types and objects.
     Struct(Vec<Value>),
+    /// an object.
+    Object(Object),
 }
 
 /// an array of same type objects.
@@ -531,4 +534,40 @@ pub enum ValueArray {
     Fraction(Vec<Fraction>),
     /// an array of Fd.
     Fd(Vec<Fd>),
+}
+
+/// An object from a pod.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Object {
+    /// the object type.
+    pub type_: u32,
+    /// the object id.
+    pub id: u32,
+    /// the object properties.
+    pub properties: Vec<Property>,
+}
+
+/// An object property.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Property {
+    /// key of the property, list of valid keys depends on the objec type.
+    pub key: u32,
+    /// flags for the property.
+    pub flags: PropertyFlags,
+    /// value of the property.
+    pub value: Value,
+}
+
+bitflags! {
+    /// Property flags
+    pub struct PropertyFlags: u32 {
+        // These flags are redefinitions from
+        // https://gitlab.freedesktop.org/pipewire/pipewire/-/blob/master/spa/include/spa/pod/pod.h
+        /// Property is read-only.
+        const READONLY = spa_sys::SPA_POD_PROP_FLAG_READONLY;
+        /// Property is some sort of hardware parameter.
+        const HARDWARE = spa_sys::SPA_POD_PROP_FLAG_HARDWARE;
+        /// Property contains a dictionnary struct.
+        const HINT_DICT = spa_sys::SPA_POD_PROP_FLAG_HINT_DICT;
+    }
 }

@@ -2,10 +2,11 @@ use libspa::{
     pod::deserialize::PodDeserializer,
     pod::{
         deserialize::{
-            DeserializeError, DeserializeSuccess, PodDeserialize, StructPodDeserializer, Visitor,
+            DeserializeError, DeserializeSuccess, ObjectPodDeserializer, PodDeserialize,
+            StructPodDeserializer, Visitor,
         },
         serialize::{PodSerialize, PodSerializer, SerializeSuccess},
-        CanonicalFixedSizedPod, Value, ValueArray,
+        CanonicalFixedSizedPod, Object, Property, PropertyFlags, Value, ValueArray,
     },
     utils::{Fd, Fraction, Id, Rectangle},
 };
@@ -45,6 +46,7 @@ pub mod c {
             rect_height: u32,
         ) -> *const spa_pod;
         pub fn build_fd(buffer: *mut u8, len: usize, fd: i64) -> i32;
+        pub fn build_test_object(buffer: *mut u8, len: usize);
         pub fn print_pod(pod: *const spa_pod);
     }
 }
@@ -1076,5 +1078,79 @@ fn fd() {
     assert_eq!(
         PodDeserializer::deserialize_any_from(&vec_rs),
         Ok((&[] as &[u8], Value::Fd(fd)))
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn object() {
+    let mut vec_c: Vec<u8> = vec![0; 64];
+    unsafe {
+        c::build_test_object(vec_c.as_mut_ptr(), vec_c.len());
+    }
+
+    #[derive(Debug)]
+    struct MyProps {
+        device: String,
+        frequency: f32,
+    }
+
+    impl<'de> PodDeserialize<'de> for MyProps {
+        fn deserialize(
+            deserializer: PodDeserializer<'de>,
+        ) -> Result<(Self, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
+        where
+            Self: Sized,
+        {
+            struct PropsVisitor;
+
+            impl<'de> Visitor<'de> for PropsVisitor {
+                type Value = MyProps;
+                type ArrayElem = std::convert::Infallible;
+
+                fn visit_object(
+                    &self,
+                    object_deserializer: &mut ObjectPodDeserializer<'de>,
+                ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+                    let (device, _flags) = object_deserializer
+                        .deserialize_property_key::<String>(spa_sys::spa_prop_SPA_PROP_device)?;
+
+                    let (frequency, _flags) = object_deserializer
+                        .deserialize_property_key::<f32>(spa_sys::spa_prop_SPA_PROP_frequency)?;
+
+                    Ok(MyProps { device, frequency })
+                }
+            }
+
+            deserializer.deserialize_object(PropsVisitor)
+        }
+    }
+
+    let (_, props) = PodDeserializer::deserialize_from::<MyProps>(&vec_c).unwrap();
+    assert_eq!(props.device, "hw:0");
+    // clippy does not like comparing f32, see https://rust-lang.github.io/rust-clippy/master/#float_cmp
+    assert!((props.frequency - 440.0_f32).abs() < f32::EPSILON);
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_c),
+        Ok((
+            &[] as &[u8],
+            Value::Object(Object {
+                type_: spa_sys::SPA_TYPE_OBJECT_Props,
+                id: spa_sys::spa_param_type_SPA_PARAM_Props,
+                properties: vec![
+                    Property {
+                        key: spa_sys::spa_prop_SPA_PROP_device,
+                        flags: PropertyFlags::empty(),
+                        value: Value::String("hw:0".into()),
+                    },
+                    Property {
+                        key: spa_sys::spa_prop_SPA_PROP_frequency,
+                        flags: PropertyFlags::empty(),
+                        value: Value::Float(440.0)
+                    }
+                ]
+            })
+        ))
     );
 }

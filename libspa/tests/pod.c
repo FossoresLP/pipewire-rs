@@ -99,6 +99,16 @@ void build_test_struct(
 	spa_pod_builder_pop(&b, &outer);
 }
 
+void build_test_object(uint8_t *buffer, size_t len)
+{
+	struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, len);
+
+	spa_pod_builder_add_object(&b,
+							   SPA_TYPE_OBJECT_Props, SPA_PARAM_Props,
+							   SPA_PROP_device, SPA_POD_String("hw:0"),
+							   SPA_PROP_frequency, SPA_POD_Float(440.0f));
+}
+
 void print_pod(const struct spa_pod *pod)
 {
 	spa_debug_pod(0, NULL, pod);
