@@ -26,6 +26,11 @@ use cookie_factory::{
     SerializeFn,
 };
 
+use crate::{
+    pod::ChoiceValue,
+    utils::{Choice, ChoiceEnum},
+};
+
 use super::{CanonicalFixedSizedPod, FixedSizedPod, PropertyFlags, Value, ValueArray};
 
 /// Implementors of this trait are able to serialize themselves into a SPA pod by using a [`PodSerializer`].
@@ -186,6 +191,16 @@ impl PodSerialize for Value {
                 }
                 object_serializer.end()
             }
+            Value::Choice(choice) => match choice {
+                ChoiceValue::Int(choice) => serializer.serialize_choice(choice),
+                ChoiceValue::Long(choice) => serializer.serialize_choice(choice),
+                ChoiceValue::Float(choice) => serializer.serialize_choice(choice),
+                ChoiceValue::Double(choice) => serializer.serialize_choice(choice),
+                ChoiceValue::Id(choice) => serializer.serialize_choice(choice),
+                ChoiceValue::Rectangle(choice) => serializer.serialize_choice(choice),
+                ChoiceValue::Fraction(choice) => serializer.serialize_choice(choice),
+                ChoiceValue::Fd(choice) => serializer.serialize_choice(choice),
+            },
         }
     }
 }
@@ -401,6 +416,68 @@ impl<O: Write + Seek> PodSerializer<O> {
             written: 0,
         })
     }
+
+    /// Serialize a `Choice` pod.
+    pub fn serialize_choice<T: CanonicalFixedSizedPod>(
+        mut self,
+        choice: &Choice<T>,
+    ) -> Result<SerializeSuccess<O>, GenError> {
+        let flags = choice.0;
+
+        let (choice_type, values) = match &choice.1 {
+            ChoiceEnum::None(value) => (spa_sys::spa_choice_type_SPA_CHOICE_None, vec![value]),
+            ChoiceEnum::Range { default, min, max } => (
+                spa_sys::spa_choice_type_SPA_CHOICE_Range,
+                vec![default, min, max],
+            ),
+            ChoiceEnum::Step {
+                default,
+                min,
+                max,
+                step,
+            } => (
+                spa_sys::spa_choice_type_SPA_CHOICE_Step,
+                vec![default, min, max, step],
+            ),
+            ChoiceEnum::Enum {
+                default,
+                alternatives,
+            } => {
+                let mut values = vec![default];
+                values.extend(alternatives);
+                (spa_sys::spa_choice_type_SPA_CHOICE_Enum, values)
+            }
+            ChoiceEnum::Flags { default, flags } => {
+                let mut values = vec![default];
+                values.extend(flags);
+                (spa_sys::spa_choice_type_SPA_CHOICE_Flags, values)
+            }
+        };
+
+        let len: usize = 2 * 8 + values.len() * (T::SIZE as usize);
+
+        self.gen(Self::header(len, spa_sys::SPA_TYPE_Choice))?;
+        self.gen(pair(ne_u32(choice_type), ne_u32(flags.bits())))?;
+        self.gen(pair(ne_u32(T::SIZE), ne_u32(T::TYPE)))?;
+
+        for v in values {
+            self.gen(|out| v.serialize_body(out))?;
+        }
+
+        let padding = if len % 8 == 0 {
+            0
+        } else {
+            8 - (len as usize % 8)
+        };
+
+        // Add padding to the pod.
+        let pad_bytes = self.gen(PodSerializer::padding(padding))?;
+
+        Ok(SerializeSuccess {
+            serializer: self,
+            len: len as u64 + pad_bytes,
+        })
+    }
 }
 
 /// This struct handles serializing arrays.
@@ -614,5 +691,14 @@ impl<O: Write + Seek> ObjectPodSerializer<O> {
             serializer,
             len: written as u64,
         })
+    }
+}
+
+impl<T: CanonicalFixedSizedPod + FixedSizedPod> PodSerialize for Choice<T> {
+    fn serialize<O: Write + Seek>(
+        &self,
+        serializer: PodSerializer<O>,
+    ) -> Result<SerializeSuccess<O>, GenError> {
+        serializer.serialize_choice(self)
     }
 }

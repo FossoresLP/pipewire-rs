@@ -6,9 +6,9 @@ use libspa::{
             StructPodDeserializer, Visitor,
         },
         serialize::{PodSerialize, PodSerializer, SerializeSuccess},
-        CanonicalFixedSizedPod, Object, Property, PropertyFlags, Value, ValueArray,
+        CanonicalFixedSizedPod, ChoiceValue, Object, Property, PropertyFlags, Value, ValueArray,
     },
-    utils::{Fd, Fraction, Id, Rectangle},
+    utils::{Choice, ChoiceEnum, ChoiceFlags, Fd, Fraction, Id, Rectangle},
 };
 use std::{ffi::CString, io::Cursor, ptr};
 
@@ -47,6 +47,70 @@ pub mod c {
         ) -> *const spa_pod;
         pub fn build_fd(buffer: *mut u8, len: usize, fd: i64) -> i32;
         pub fn build_test_object(buffer: *mut u8, len: usize) -> *const spa_pod;
+        pub fn build_choice_i32(
+            buffer: *mut u8,
+            len: usize,
+            choice_type: u32,
+            flags: u32,
+            n_elems: u32,
+            elems: *const i32,
+        ) -> *const spa_pod;
+        pub fn build_choice_i64(
+            buffer: *mut u8,
+            len: usize,
+            choice_type: u32,
+            flags: u32,
+            n_elems: u32,
+            elems: *const i64,
+        ) -> *const spa_pod;
+        pub fn build_choice_f32(
+            buffer: *mut u8,
+            len: usize,
+            choice_type: u32,
+            flags: u32,
+            n_elems: u32,
+            elems: *const f32,
+        ) -> *const spa_pod;
+        pub fn build_choice_f64(
+            buffer: *mut u8,
+            len: usize,
+            choice_type: u32,
+            flags: u32,
+            n_elems: u32,
+            elems: *const f64,
+        ) -> *const spa_pod;
+        pub fn build_choice_id(
+            buffer: *mut u8,
+            len: usize,
+            choice_type: u32,
+            flags: u32,
+            n_elems: u32,
+            elems: *const u32,
+        ) -> *const spa_pod;
+        pub fn build_choice_rectangle(
+            buffer: *mut u8,
+            len: usize,
+            choice_type: u32,
+            flags: u32,
+            n_elems: u32,
+            elems: *const u32,
+        ) -> *const spa_pod;
+        pub fn build_choice_fraction(
+            buffer: *mut u8,
+            len: usize,
+            choice_type: u32,
+            flags: u32,
+            n_elems: u32,
+            elems: *const u32,
+        ) -> *const spa_pod;
+        pub fn build_choice_fd(
+            buffer: *mut u8,
+            len: usize,
+            choice_type: u32,
+            flags: u32,
+            n_elems: u32,
+            elems: *const i64,
+        ) -> *const spa_pod;
         pub fn print_pod(pod: *const spa_pod);
     }
 }
@@ -1376,4 +1440,655 @@ fn object() {
         .into_inner();
 
     assert_eq!(vec_rs, vec_c);
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn choice_range_f32() {
+    let choice = Choice(
+        ChoiceFlags::empty(),
+        ChoiceEnum::Range {
+            default: 440.0,
+            min: 110.0,
+            max: 880.0,
+        },
+    );
+
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &choice)
+        .unwrap()
+        .0
+        .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(
+        Cursor::new(Vec::new()),
+        &Value::Choice(ChoiceValue::Float(choice.clone())),
+    )
+    .unwrap()
+    .0
+    .into_inner();
+
+    let mut vec_c: Vec<u8> = vec![0; 40];
+    unsafe {
+        assert_ne!(
+            c::build_choice_f32(
+                vec_c.as_mut_ptr(),
+                vec_c.len(),
+                spa_sys::spa_choice_type_SPA_CHOICE_Range,
+                0,
+                3,
+                &[440.0_f32, 110.0, 880.0] as *const f32,
+            ),
+            std::ptr::null()
+        );
+    }
+    assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs, vec_rs_val);
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_c),
+        Ok((&[] as &[u8], choice.clone()))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_c),
+        Ok((&[] as &[u8], Value::Choice(ChoiceValue::Float(choice))))
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn choice_range_i32() {
+    let choice = Choice(
+        ChoiceFlags::empty(),
+        ChoiceEnum::Range {
+            default: 5,
+            min: 2,
+            max: 10,
+        },
+    );
+
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &choice)
+        .unwrap()
+        .0
+        .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(
+        Cursor::new(Vec::new()),
+        &Value::Choice(ChoiceValue::Int(choice.clone())),
+    )
+    .unwrap()
+    .0
+    .into_inner();
+
+    let mut vec_c: Vec<u8> = vec![0; 40];
+    unsafe {
+        assert_ne!(
+            c::build_choice_i32(
+                vec_c.as_mut_ptr(),
+                vec_c.len(),
+                spa_sys::spa_choice_type_SPA_CHOICE_Range,
+                0,
+                3,
+                &[5, 2, 10] as *const i32,
+            ),
+            std::ptr::null()
+        );
+    }
+    assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs, vec_rs_val);
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_c),
+        Ok((&[] as &[u8], choice.clone()))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_c),
+        Ok((&[] as &[u8], Value::Choice(ChoiceValue::Int(choice))))
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn choice_none_i32() {
+    let choice = Choice(ChoiceFlags::empty(), ChoiceEnum::None(5));
+
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &choice)
+        .unwrap()
+        .0
+        .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(
+        Cursor::new(Vec::new()),
+        &Value::Choice(ChoiceValue::Int(choice.clone())),
+    )
+    .unwrap()
+    .0
+    .into_inner();
+
+    let mut vec_c: Vec<u8> = vec![0; 32];
+    unsafe {
+        assert_ne!(
+            c::build_choice_i32(
+                vec_c.as_mut_ptr(),
+                vec_c.len(),
+                spa_sys::spa_choice_type_SPA_CHOICE_None,
+                0,
+                1,
+                &[5] as *const i32,
+            ),
+            std::ptr::null()
+        );
+    }
+    assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs, vec_rs_val);
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_c),
+        Ok((&[] as &[u8], choice.clone()))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_c),
+        Ok((&[] as &[u8], Value::Choice(ChoiceValue::Int(choice))))
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn choice_step_i32() {
+    let choice = Choice(
+        ChoiceFlags::empty(),
+        ChoiceEnum::Step {
+            default: 5,
+            min: 2,
+            max: 10,
+            step: 1,
+        },
+    );
+
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &choice)
+        .unwrap()
+        .0
+        .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(
+        Cursor::new(Vec::new()),
+        &Value::Choice(ChoiceValue::Int(choice.clone())),
+    )
+    .unwrap()
+    .0
+    .into_inner();
+
+    let mut vec_c: Vec<u8> = vec![0; 40];
+    unsafe {
+        assert_ne!(
+            c::build_choice_i32(
+                vec_c.as_mut_ptr(),
+                vec_c.len(),
+                spa_sys::spa_choice_type_SPA_CHOICE_Step,
+                0,
+                4,
+                &[5, 2, 10, 1] as *const i32,
+            ),
+            std::ptr::null()
+        );
+    }
+    assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs, vec_rs_val);
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_c),
+        Ok((&[] as &[u8], choice.clone()))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_c),
+        Ok((&[] as &[u8], Value::Choice(ChoiceValue::Int(choice))))
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn choice_enum_i32() {
+    let choice = Choice(
+        ChoiceFlags::empty(),
+        ChoiceEnum::Enum {
+            default: 5,
+            alternatives: vec![2, 10, 1],
+        },
+    );
+
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &choice)
+        .unwrap()
+        .0
+        .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(
+        Cursor::new(Vec::new()),
+        &Value::Choice(ChoiceValue::Int(choice.clone())),
+    )
+    .unwrap()
+    .0
+    .into_inner();
+
+    let mut vec_c: Vec<u8> = vec![0; 40];
+    unsafe {
+        assert_ne!(
+            c::build_choice_i32(
+                vec_c.as_mut_ptr(),
+                vec_c.len(),
+                spa_sys::spa_choice_type_SPA_CHOICE_Enum,
+                0,
+                4,
+                &[5, 2, 10, 1] as *const i32,
+            ),
+            std::ptr::null()
+        );
+    }
+    assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs, vec_rs_val);
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_c),
+        Ok((&[] as &[u8], choice.clone()))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_c),
+        Ok((&[] as &[u8], Value::Choice(ChoiceValue::Int(choice))))
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn choice_flags_i32() {
+    let choice = Choice(
+        ChoiceFlags::empty(),
+        ChoiceEnum::Flags {
+            default: 5,
+            flags: vec![2, 10, 1],
+        },
+    );
+
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &choice)
+        .unwrap()
+        .0
+        .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(
+        Cursor::new(Vec::new()),
+        &Value::Choice(ChoiceValue::Int(choice.clone())),
+    )
+    .unwrap()
+    .0
+    .into_inner();
+
+    let mut vec_c: Vec<u8> = vec![0; 40];
+    unsafe {
+        assert_ne!(
+            c::build_choice_i32(
+                vec_c.as_mut_ptr(),
+                vec_c.len(),
+                spa_sys::spa_choice_type_SPA_CHOICE_Flags,
+                0,
+                4,
+                &[5, 2, 10, 1] as *const i32,
+            ),
+            std::ptr::null()
+        );
+    }
+    assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs, vec_rs_val);
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_c),
+        Ok((&[] as &[u8], choice.clone()))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_c),
+        Ok((&[] as &[u8], Value::Choice(ChoiceValue::Int(choice))))
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn choice_range_i64() {
+    let choice = Choice(
+        ChoiceFlags::empty(),
+        ChoiceEnum::Range {
+            default: 440_i64,
+            min: 110,
+            max: 880,
+        },
+    );
+
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &choice)
+        .unwrap()
+        .0
+        .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(
+        Cursor::new(Vec::new()),
+        &Value::Choice(ChoiceValue::Long(choice.clone())),
+    )
+    .unwrap()
+    .0
+    .into_inner();
+
+    let mut vec_c: Vec<u8> = vec![0; 48];
+    unsafe {
+        assert_ne!(
+            c::build_choice_i64(
+                vec_c.as_mut_ptr(),
+                vec_c.len(),
+                spa_sys::spa_choice_type_SPA_CHOICE_Range,
+                0,
+                3,
+                &[440_i64, 110, 880] as *const i64,
+            ),
+            std::ptr::null()
+        );
+    }
+    assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs, vec_rs_val);
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_c),
+        Ok((&[] as &[u8], choice.clone()))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_c),
+        Ok((&[] as &[u8], Value::Choice(ChoiceValue::Long(choice))))
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn choice_range_f64() {
+    let choice = Choice(
+        ChoiceFlags::empty(),
+        ChoiceEnum::Range {
+            default: 440.0_f64,
+            min: 110.0,
+            max: 880.0,
+        },
+    );
+
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &choice)
+        .unwrap()
+        .0
+        .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(
+        Cursor::new(Vec::new()),
+        &Value::Choice(ChoiceValue::Double(choice.clone())),
+    )
+    .unwrap()
+    .0
+    .into_inner();
+
+    let mut vec_c: Vec<u8> = vec![0; 48];
+    unsafe {
+        assert_ne!(
+            c::build_choice_f64(
+                vec_c.as_mut_ptr(),
+                vec_c.len(),
+                spa_sys::spa_choice_type_SPA_CHOICE_Range,
+                0,
+                3,
+                &[440.0_f64, 110.0, 880.0] as *const f64,
+            ),
+            std::ptr::null()
+        );
+    }
+    assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs, vec_rs_val);
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_c),
+        Ok((&[] as &[u8], choice.clone()))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_c),
+        Ok((&[] as &[u8], Value::Choice(ChoiceValue::Double(choice))))
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn choice_enum_id() {
+    let choice = Choice(
+        ChoiceFlags::empty(),
+        ChoiceEnum::Enum {
+            default: Id(5),
+            alternatives: vec![Id(2), Id(10), Id(1)],
+        },
+    );
+
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &choice)
+        .unwrap()
+        .0
+        .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(
+        Cursor::new(Vec::new()),
+        &Value::Choice(ChoiceValue::Id(choice.clone())),
+    )
+    .unwrap()
+    .0
+    .into_inner();
+
+    let mut vec_c: Vec<u8> = vec![0; 40];
+    unsafe {
+        assert_ne!(
+            c::build_choice_id(
+                vec_c.as_mut_ptr(),
+                vec_c.len(),
+                spa_sys::spa_choice_type_SPA_CHOICE_Enum,
+                0,
+                4,
+                &[5_u32, 2, 10, 1] as *const u32,
+            ),
+            std::ptr::null()
+        );
+    }
+    assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs, vec_rs_val);
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_c),
+        Ok((&[] as &[u8], choice.clone()))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_c),
+        Ok((&[] as &[u8], Value::Choice(ChoiceValue::Id(choice))))
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn choice_enum_rectangle() {
+    let choice = Choice(
+        ChoiceFlags::empty(),
+        ChoiceEnum::Enum {
+            default: Rectangle {
+                width: 800,
+                height: 600,
+            },
+            alternatives: vec![
+                Rectangle {
+                    width: 1920,
+                    height: 1080,
+                },
+                Rectangle {
+                    width: 300,
+                    height: 200,
+                },
+            ],
+        },
+    );
+
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &choice)
+        .unwrap()
+        .0
+        .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(
+        Cursor::new(Vec::new()),
+        &Value::Choice(ChoiceValue::Rectangle(choice.clone())),
+    )
+    .unwrap()
+    .0
+    .into_inner();
+
+    let mut vec_c: Vec<u8> = vec![0; 48];
+    unsafe {
+        assert_ne!(
+            c::build_choice_rectangle(
+                vec_c.as_mut_ptr(),
+                vec_c.len(),
+                spa_sys::spa_choice_type_SPA_CHOICE_Enum,
+                0,
+                6,
+                &[800_u32, 600, 1920, 1080, 300, 200] as *const u32,
+            ),
+            std::ptr::null()
+        );
+    }
+    assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs, vec_rs_val);
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_c),
+        Ok((&[] as &[u8], choice.clone()))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_c),
+        Ok((&[] as &[u8], Value::Choice(ChoiceValue::Rectangle(choice))))
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn choice_enum_fraction() {
+    let choice = Choice(
+        ChoiceFlags::empty(),
+        ChoiceEnum::Enum {
+            default: Fraction { num: 1, denom: 2 },
+            alternatives: vec![Fraction { num: 2, denom: 3 }, Fraction { num: 1, denom: 3 }],
+        },
+    );
+
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &choice)
+        .unwrap()
+        .0
+        .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(
+        Cursor::new(Vec::new()),
+        &Value::Choice(ChoiceValue::Fraction(choice.clone())),
+    )
+    .unwrap()
+    .0
+    .into_inner();
+
+    let mut vec_c: Vec<u8> = vec![0; 48];
+    unsafe {
+        assert_ne!(
+            c::build_choice_fraction(
+                vec_c.as_mut_ptr(),
+                vec_c.len(),
+                spa_sys::spa_choice_type_SPA_CHOICE_Enum,
+                0,
+                6,
+                &[1_u32, 2, 2, 3, 1, 3] as *const u32,
+            ),
+            std::ptr::null()
+        );
+    }
+    assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs, vec_rs_val);
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_c),
+        Ok((&[] as &[u8], choice.clone()))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_c),
+        Ok((&[] as &[u8], Value::Choice(ChoiceValue::Fraction(choice))))
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn choice_enum_fd() {
+    let choice = Choice(
+        ChoiceFlags::empty(),
+        ChoiceEnum::Enum {
+            default: Fd(5),
+            alternatives: vec![Fd(2), Fd(10), Fd(1)],
+        },
+    );
+
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &choice)
+        .unwrap()
+        .0
+        .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(
+        Cursor::new(Vec::new()),
+        &Value::Choice(ChoiceValue::Fd(choice.clone())),
+    )
+    .unwrap()
+    .0
+    .into_inner();
+
+    let mut vec_c: Vec<u8> = vec![0; 56];
+    unsafe {
+        assert_ne!(
+            c::build_choice_fd(
+                vec_c.as_mut_ptr(),
+                vec_c.len(),
+                spa_sys::spa_choice_type_SPA_CHOICE_Enum,
+                0,
+                4,
+                &[5_i64, 2, 10, 1] as *const i64,
+            ),
+            std::ptr::null()
+        );
+    }
+    assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs, vec_rs_val);
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_c),
+        Ok((&[] as &[u8], choice.clone()))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_c),
+        Ok((&[] as &[u8], Value::Choice(ChoiceValue::Fd(choice))))
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn choice_extra_values() {
+    // deserialize a none choice having more than one values, which are ignored.
+    let choice = Choice(ChoiceFlags::empty(), ChoiceEnum::None(5));
+
+    let mut vec_c: Vec<u8> = vec![0; 32];
+    unsafe {
+        assert_ne!(
+            c::build_choice_i32(
+                vec_c.as_mut_ptr(),
+                vec_c.len(),
+                spa_sys::spa_choice_type_SPA_CHOICE_None,
+                0,
+                1,
+                &[5, 6, 7, 8] as *const i32,
+            ),
+            std::ptr::null()
+        );
+    }
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_c),
+        Ok((&[] as &[u8], choice))
+    );
 }

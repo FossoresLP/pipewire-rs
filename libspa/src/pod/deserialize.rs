@@ -19,10 +19,12 @@ use nom::{
     IResult,
 };
 
-use super::{CanonicalFixedSizedPod, FixedSizedPod, Object, PropertyFlags, Value, ValueArray};
+use super::{
+    CanonicalFixedSizedPod, ChoiceValue, FixedSizedPod, Object, PropertyFlags, Value, ValueArray,
+};
 use crate::{
     pod::Property,
-    utils::{Fd, Fraction, Id, Rectangle},
+    utils::{Choice, ChoiceEnum, ChoiceFlags, Fd, Fraction, Id, Rectangle},
 };
 
 /// Implementors of this trait can be deserialized from the raw SPA Pod format using a [`PodDeserializer`]-
@@ -586,6 +588,169 @@ impl<'de, 'a> PodDeserializer<'de> {
         Ok((res, success))
     }
 
+    fn deserialize_choice_values<E>(
+        self,
+        num_values: u32,
+    ) -> Result<(Vec<E>, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
+    where
+        E: CanonicalFixedSizedPod + FixedSizedPod,
+    {
+        // re-use the array deserializer as choice values are serialized the same way
+        let mut array_deserializer = ArrayPodDeserializer {
+            deserializer: self,
+            length: num_values,
+            deserialized: 0,
+            _phantom: PhantomData,
+        };
+
+        // C implementation documents that there might be more elements than required by the choice type,
+        // which should be ignored, so deserialize all the values.
+        let mut elements = Vec::new();
+        for _ in 0..num_values {
+            elements.push(array_deserializer.deserialize_element()?);
+        }
+        let success = array_deserializer.end()?;
+
+        Ok((elements, success))
+    }
+
+    /// Deserialize a `Choice` pod.
+    pub fn deserialize_choice<V>(
+        mut self,
+        visitor: V,
+    ) -> Result<(V::Value, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
+    where
+        V: Visitor<'de>,
+    {
+        let len = self.parse(Self::header(spa_sys::SPA_TYPE_Choice))?;
+        let (choice_type, flags) =
+            self.parse(pair(u32(Endianness::Native), u32(Endianness::Native)))?;
+        let (child_size, child_type) =
+            self.parse(pair(u32(Endianness::Native), u32(Endianness::Native)))?;
+        let num_values = (len - 16) / child_size;
+
+        fn create_choice<'de, E>(
+            choice_type: u32,
+            values: Vec<E>,
+            flags: u32,
+        ) -> Result<Choice<E>, DeserializeError<&'de [u8]>>
+        where
+            E: CanonicalFixedSizedPod + FixedSizedPod + Copy,
+        {
+            let flags = ChoiceFlags::from_bits(flags).expect("invalid choice flags");
+
+            match choice_type {
+                spa_sys::spa_choice_type_SPA_CHOICE_None => {
+                    if values.is_empty() {
+                        Err(DeserializeError::MissingChoiceValues)
+                    } else {
+                        Ok(Choice(ChoiceFlags::empty(), ChoiceEnum::None(values[0])))
+                    }
+                }
+                spa_sys::spa_choice_type_SPA_CHOICE_Range => {
+                    if values.len() < 3 {
+                        Err(DeserializeError::MissingChoiceValues)
+                    } else {
+                        Ok(Choice(
+                            flags,
+                            ChoiceEnum::Range {
+                                default: values[0],
+                                min: values[1],
+                                max: values[2],
+                            },
+                        ))
+                    }
+                }
+                spa_sys::spa_choice_type_SPA_CHOICE_Step => {
+                    if values.len() < 4 {
+                        Err(DeserializeError::MissingChoiceValues)
+                    } else {
+                        Ok(Choice(
+                            flags,
+                            ChoiceEnum::Step {
+                                default: values[0],
+                                min: values[1],
+                                max: values[2],
+                                step: values[3],
+                            },
+                        ))
+                    }
+                }
+                spa_sys::spa_choice_type_SPA_CHOICE_Enum => {
+                    if values.is_empty() {
+                        Err(DeserializeError::MissingChoiceValues)
+                    } else {
+                        Ok(Choice(
+                            flags,
+                            ChoiceEnum::Enum {
+                                default: values[0],
+                                alternatives: values[1..].to_vec(),
+                            },
+                        ))
+                    }
+                }
+                spa_sys::spa_choice_type_SPA_CHOICE_Flags => {
+                    if values.is_empty() {
+                        Err(DeserializeError::MissingChoiceValues)
+                    } else {
+                        Ok(Choice(
+                            flags,
+                            ChoiceEnum::Flags {
+                                default: values[0],
+                                flags: values[1..].to_vec(),
+                            },
+                        ))
+                    }
+                }
+                _ => Err(DeserializeError::InvalidChoiceType),
+            }
+        }
+
+        match child_type {
+            spa_sys::SPA_TYPE_Int => {
+                let (values, success) = self.deserialize_choice_values::<i32>(num_values)?;
+                let choice = create_choice(choice_type, values, flags)?;
+                Ok((visitor.visit_choice_i32(choice)?, success))
+            }
+            spa_sys::SPA_TYPE_Long => {
+                let (values, success) = self.deserialize_choice_values::<i64>(num_values)?;
+                let choice = create_choice(choice_type, values, flags)?;
+                Ok((visitor.visit_choice_i64(choice)?, success))
+            }
+            spa_sys::SPA_TYPE_Float => {
+                let (values, success) = self.deserialize_choice_values::<f32>(num_values)?;
+                let choice = create_choice(choice_type, values, flags)?;
+                Ok((visitor.visit_choice_f32(choice)?, success))
+            }
+            spa_sys::SPA_TYPE_Double => {
+                let (values, success) = self.deserialize_choice_values::<f64>(num_values)?;
+                let choice = create_choice(choice_type, values, flags)?;
+                Ok((visitor.visit_choice_f64(choice)?, success))
+            }
+            spa_sys::SPA_TYPE_Id => {
+                let (values, success) = self.deserialize_choice_values::<Id>(num_values)?;
+                let choice = create_choice(choice_type, values, flags)?;
+                Ok((visitor.visit_choice_id(choice)?, success))
+            }
+            spa_sys::SPA_TYPE_Rectangle => {
+                let (values, success) = self.deserialize_choice_values::<Rectangle>(num_values)?;
+                let choice = create_choice(choice_type, values, flags)?;
+                Ok((visitor.visit_choice_rectangle(choice)?, success))
+            }
+            spa_sys::SPA_TYPE_Fraction => {
+                let (values, success) = self.deserialize_choice_values::<Fraction>(num_values)?;
+                let choice = create_choice(choice_type, values, flags)?;
+                Ok((visitor.visit_choice_fraction(choice)?, success))
+            }
+            spa_sys::SPA_TYPE_Fd => {
+                let (values, success) = self.deserialize_choice_values::<Fd>(num_values)?;
+                let choice = create_choice(choice_type, values, flags)?;
+                Ok((visitor.visit_choice_fd(choice)?, success))
+            }
+            _ => Err(DeserializeError::InvalidType),
+        }
+    }
+
     /// Deserialize any kind of pod using a visitor producing [`Value`].
     pub fn deserialize_any(
         self,
@@ -608,6 +773,7 @@ impl<'de, 'a> PodDeserializer<'de> {
             spa_sys::SPA_TYPE_Struct => self.deserialize_struct(ValueVisitor),
             spa_sys::SPA_TYPE_Array => self.deserialize_array_any(),
             spa_sys::SPA_TYPE_Object => self.deserialize_object(ValueVisitor),
+            spa_sys::SPA_TYPE_Choice => self.deserialize_choice(ValueVisitor),
             _ => Err(DeserializeError::InvalidType),
         }
     }
@@ -916,6 +1082,10 @@ pub enum DeserializeError<I> {
     PropertyMissing,
     /// The property does not have the expected key
     PropertyWrongKey(u32),
+    /// Invalid choice type
+    InvalidChoiceType,
+    /// Values are missing in the choice pod
+    MissingChoiceValues,
 }
 
 impl<I> From<nom::Err<nom::error::Error<I>>> for DeserializeError<I> {
@@ -1013,6 +1183,70 @@ pub trait Visitor<'de>: Sized {
     fn visit_object(
         &self,
         _object_deserializer: &mut ObjectPodDeserializer<'de>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
+
+    /// The input contains an [`i32`] choice.
+    fn visit_choice_i32(
+        &self,
+        _choice: Choice<i32>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
+
+    /// The input contains an [`i64`] choice.
+    fn visit_choice_i64(
+        &self,
+        _choice: Choice<i64>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
+
+    /// The input contains a [`f32`] choice.
+    fn visit_choice_f32(
+        &self,
+        _choice: Choice<f32>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
+
+    /// The input contains a [`f64`] choice.
+    fn visit_choice_f64(
+        &self,
+        _choice: Choice<f64>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
+
+    /// The input contains a [`Id`] choice.
+    fn visit_choice_id(
+        &self,
+        _choice: Choice<Id>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
+
+    /// The input contains a [`Rectangle`] choice.
+    fn visit_choice_rectangle(
+        &self,
+        _choice: Choice<Rectangle>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
+
+    /// The input contains a [`Fraction`] choice.
+    fn visit_choice_fraction(
+        &self,
+        _choice: Choice<Fraction>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
+
+    /// The input contains a [`Fd`] choice.
+    fn visit_choice_fd(
+        &self,
+        _choice: Choice<Fd>,
     ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
         Err(DeserializeError::UnsupportedType)
     }
@@ -1161,6 +1395,7 @@ impl<'de> Visitor<'de> for FdVisitor {
         Ok(v)
     }
 }
+
 /// A visitor producing [`Vec`] for array values.
 pub struct VecVisitor<E: FixedSizedPod> {
     _phantom: PhantomData<E>,
@@ -1269,6 +1504,62 @@ impl<'de> Visitor<'de> for ValueVisitor {
         };
 
         Ok(Value::Object(object))
+    }
+
+    fn visit_choice_i32(
+        &self,
+        choice: Choice<i32>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(Value::Choice(ChoiceValue::Int(choice)))
+    }
+
+    fn visit_choice_i64(
+        &self,
+        choice: Choice<i64>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(Value::Choice(ChoiceValue::Long(choice)))
+    }
+
+    fn visit_choice_f32(
+        &self,
+        choice: Choice<f32>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(Value::Choice(ChoiceValue::Float(choice)))
+    }
+
+    fn visit_choice_f64(
+        &self,
+        choice: Choice<f64>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(Value::Choice(ChoiceValue::Double(choice)))
+    }
+
+    fn visit_choice_id(
+        &self,
+        choice: Choice<Id>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(Value::Choice(ChoiceValue::Id(choice)))
+    }
+
+    fn visit_choice_rectangle(
+        &self,
+        choice: Choice<Rectangle>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(Value::Choice(ChoiceValue::Rectangle(choice)))
+    }
+
+    fn visit_choice_fraction(
+        &self,
+        choice: Choice<Fraction>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(Value::Choice(ChoiceValue::Fraction(choice)))
+    }
+
+    fn visit_choice_fd(
+        &self,
+        choice: Choice<Fd>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(Value::Choice(ChoiceValue::Fd(choice)))
     }
 }
 
@@ -1409,5 +1700,124 @@ impl<'de> Visitor<'de> for ValueArrayFdVisitor {
         elements: Vec<Self::ArrayElem>,
     ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
         Ok(ValueArray::Fd(elements))
+    }
+}
+
+/// A visitor producing [`Choice`] for integer choice values.
+pub struct ChoiceIntVisitor;
+
+impl<'de> Visitor<'de> for ChoiceIntVisitor {
+    type Value = Choice<i32>;
+    type ArrayElem = Infallible;
+
+    fn visit_choice_i32(
+        &self,
+        choice: Choice<i32>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(choice)
+    }
+}
+
+/// A visitor producing [`Choice`] for long integer choice values.
+pub struct ChoiceLongVisitor;
+
+impl<'de> Visitor<'de> for ChoiceLongVisitor {
+    type Value = Choice<i64>;
+    type ArrayElem = Infallible;
+
+    fn visit_choice_i64(
+        &self,
+        choice: Choice<i64>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(choice)
+    }
+}
+
+/// A visitor producing [`Choice`] for floating choice values.
+pub struct ChoiceFloatVisitor;
+
+impl<'de> Visitor<'de> for ChoiceFloatVisitor {
+    type Value = Choice<f32>;
+    type ArrayElem = Infallible;
+
+    fn visit_choice_f32(
+        &self,
+        choice: Choice<f32>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(choice)
+    }
+}
+
+/// A visitor producing [`Choice`] for double floating choice values.
+pub struct ChoiceDoubleVisitor;
+
+impl<'de> Visitor<'de> for ChoiceDoubleVisitor {
+    type Value = Choice<f64>;
+    type ArrayElem = Infallible;
+
+    fn visit_choice_f64(
+        &self,
+        choice: Choice<f64>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(choice)
+    }
+}
+
+/// A visitor producing [`Choice`] for id choice values.
+pub struct ChoiceIdVisitor;
+
+impl<'de> Visitor<'de> for ChoiceIdVisitor {
+    type Value = Choice<Id>;
+    type ArrayElem = Infallible;
+
+    fn visit_choice_id(
+        &self,
+        choice: Choice<Id>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(choice)
+    }
+}
+
+/// A visitor producing [`Choice`] for rectangle choice values.
+pub struct ChoiceRectangleVisitor;
+
+impl<'de> Visitor<'de> for ChoiceRectangleVisitor {
+    type Value = Choice<Rectangle>;
+    type ArrayElem = Infallible;
+
+    fn visit_choice_rectangle(
+        &self,
+        choice: Choice<Rectangle>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(choice)
+    }
+}
+/// A visitor producing [`Choice`] for fraction choice values.
+pub struct ChoiceFractionVisitor;
+
+impl<'de> Visitor<'de> for ChoiceFractionVisitor {
+    type Value = Choice<Fraction>;
+    type ArrayElem = Infallible;
+
+    fn visit_choice_fraction(
+        &self,
+        choice: Choice<Fraction>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(choice)
+    }
+}
+
+/// A visitor producing [`Choice`] for fd choice values.
+pub struct ChoiceFdVisitor;
+
+impl<'de> Visitor<'de> for ChoiceFdVisitor {
+    type Value = Choice<Fd>;
+    type ArrayElem = Infallible;
+
+    fn visit_choice_fd(
+        &self,
+        choice: Choice<Fd>,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(choice)
     }
 }

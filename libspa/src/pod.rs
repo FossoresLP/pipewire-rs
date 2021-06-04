@@ -31,11 +31,12 @@ use nom::{
 use deserialize::{BoolVisitor, NoneVisitor, PodDeserialize, PodDeserializer};
 use serialize::{PodSerialize, PodSerializer};
 
-use crate::utils::{Fd, Fraction, Id, Rectangle};
+use crate::utils::{Choice, Fd, Fraction, Id, Rectangle};
 
 use self::deserialize::{
-    DoubleVisitor, FdVisitor, FloatVisitor, FractionVisitor, IdVisitor, IntVisitor, LongVisitor,
-    RectangleVisitor,
+    ChoiceDoubleVisitor, ChoiceFdVisitor, ChoiceFloatVisitor, ChoiceFractionVisitor,
+    ChoiceIdVisitor, ChoiceIntVisitor, ChoiceLongVisitor, ChoiceRectangleVisitor, DoubleVisitor,
+    FdVisitor, FloatVisitor, FractionVisitor, IdVisitor, IntVisitor, LongVisitor, RectangleVisitor,
 };
 
 /// Implementors of this trait are the canonical representation of a specific type of fixed sized SPA pod.
@@ -462,6 +463,118 @@ impl<'de> PodDeserialize<'de> for Fd {
     }
 }
 
+impl<'de> PodDeserialize<'de> for Choice<i32> {
+    fn deserialize(
+        deserializer: PodDeserializer<'de>,
+    ) -> Result<
+        (Self, deserialize::DeserializeSuccess<'de>),
+        deserialize::DeserializeError<&'de [u8]>,
+    >
+    where
+        Self: Sized,
+    {
+        deserializer.deserialize_choice(ChoiceIntVisitor)
+    }
+}
+
+impl<'de> PodDeserialize<'de> for Choice<i64> {
+    fn deserialize(
+        deserializer: PodDeserializer<'de>,
+    ) -> Result<
+        (Self, deserialize::DeserializeSuccess<'de>),
+        deserialize::DeserializeError<&'de [u8]>,
+    >
+    where
+        Self: Sized,
+    {
+        deserializer.deserialize_choice(ChoiceLongVisitor)
+    }
+}
+
+impl<'de> PodDeserialize<'de> for Choice<f32> {
+    fn deserialize(
+        deserializer: PodDeserializer<'de>,
+    ) -> Result<
+        (Self, deserialize::DeserializeSuccess<'de>),
+        deserialize::DeserializeError<&'de [u8]>,
+    >
+    where
+        Self: Sized,
+    {
+        deserializer.deserialize_choice(ChoiceFloatVisitor)
+    }
+}
+
+impl<'de> PodDeserialize<'de> for Choice<f64> {
+    fn deserialize(
+        deserializer: PodDeserializer<'de>,
+    ) -> Result<
+        (Self, deserialize::DeserializeSuccess<'de>),
+        deserialize::DeserializeError<&'de [u8]>,
+    >
+    where
+        Self: Sized,
+    {
+        deserializer.deserialize_choice(ChoiceDoubleVisitor)
+    }
+}
+
+impl<'de> PodDeserialize<'de> for Choice<Id> {
+    fn deserialize(
+        deserializer: PodDeserializer<'de>,
+    ) -> Result<
+        (Self, deserialize::DeserializeSuccess<'de>),
+        deserialize::DeserializeError<&'de [u8]>,
+    >
+    where
+        Self: Sized,
+    {
+        deserializer.deserialize_choice(ChoiceIdVisitor)
+    }
+}
+
+impl<'de> PodDeserialize<'de> for Choice<Rectangle> {
+    fn deserialize(
+        deserializer: PodDeserializer<'de>,
+    ) -> Result<
+        (Self, deserialize::DeserializeSuccess<'de>),
+        deserialize::DeserializeError<&'de [u8]>,
+    >
+    where
+        Self: Sized,
+    {
+        deserializer.deserialize_choice(ChoiceRectangleVisitor)
+    }
+}
+
+impl<'de> PodDeserialize<'de> for Choice<Fraction> {
+    fn deserialize(
+        deserializer: PodDeserializer<'de>,
+    ) -> Result<
+        (Self, deserialize::DeserializeSuccess<'de>),
+        deserialize::DeserializeError<&'de [u8]>,
+    >
+    where
+        Self: Sized,
+    {
+        deserializer.deserialize_choice(ChoiceFractionVisitor)
+    }
+}
+
+impl<'de> PodDeserialize<'de> for Choice<Fd> {
+    fn deserialize(
+        deserializer: PodDeserializer<'de>,
+    ) -> Result<
+        (Self, deserialize::DeserializeSuccess<'de>),
+        deserialize::DeserializeError<&'de [u8]>,
+    >
+    where
+        Self: Sized,
+    {
+        deserializer.deserialize_choice(ChoiceFdVisitor)
+    }
+}
+
 impl<'de> PodDeserialize<'de> for Value {
     fn deserialize(
         deserializer: PodDeserializer<'de>,
@@ -509,6 +622,8 @@ pub enum Value {
     Struct(Vec<Value>),
     /// an object.
     Object(Object),
+    /// a choice.
+    Choice(ChoiceValue),
 }
 
 /// an array of same type objects.
@@ -534,6 +649,27 @@ pub enum ValueArray {
     Fraction(Vec<Fraction>),
     /// an array of Fd.
     Fd(Vec<Fd>),
+}
+
+/// A typed choice.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ChoiceValue {
+    /// Choice on 32 bits integer values.
+    Int(Choice<i32>),
+    /// Choice on 64 bits integer values.
+    Long(Choice<i64>),
+    /// Choice on 32 bits floating values.
+    Float(Choice<f32>),
+    /// Choice on 64 bits floating values.
+    Double(Choice<f64>),
+    /// Choice on id values.
+    Id(Choice<Id>),
+    /// Choice on rectangle values.
+    Rectangle(Choice<Rectangle>),
+    /// Choice on fraction values.
+    Fraction(Choice<Fraction>),
+    /// Choice on fd values.
+    Fd(Choice<Fd>),
 }
 
 /// An object from a pod.

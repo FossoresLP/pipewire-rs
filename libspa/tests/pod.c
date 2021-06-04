@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdarg.h>
 
 #include <spa/pod/builder.h>
@@ -107,6 +108,138 @@ struct spa_pod *build_test_object(uint8_t *buffer, size_t len)
 									  SPA_TYPE_OBJECT_Props, SPA_PARAM_Props,
 									  SPA_PROP_device, SPA_POD_String("hw:0"),
 									  SPA_PROP_frequency, SPA_POD_Float(440.0f));
+}
+
+struct spa_pod *build_choice_i32(uint8_t *buffer, size_t len, uint32_t choice_type, uint32_t flags, uint32_t n_elems, uint32_t *elems)
+{
+	struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, len);
+	struct spa_pod_frame f;
+	uint32_t i;
+
+	spa_pod_builder_push_choice(&b, &f, choice_type, flags);
+
+	for (i = 0; i < n_elems; i++)
+	{
+		spa_pod_builder_int(&b, elems[i]);
+	}
+
+	return spa_pod_builder_pop(&b, &f);
+}
+
+struct spa_pod *build_choice_i64(uint8_t *buffer, size_t len, uint32_t choice_type, uint32_t flags, uint32_t n_elems, uint64_t *elems)
+{
+	struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, len);
+	struct spa_pod_frame f;
+	uint32_t i;
+
+	spa_pod_builder_push_choice(&b, &f, choice_type, flags);
+
+	for (i = 0; i < n_elems; i++)
+	{
+		spa_pod_builder_long(&b, elems[i]);
+	}
+
+	return spa_pod_builder_pop(&b, &f);
+}
+
+struct spa_pod *build_choice_f32(uint8_t *buffer, size_t len, uint32_t choice_type, uint32_t flags, uint32_t n_elems, float *elems)
+{
+	struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, len);
+	struct spa_pod_frame f;
+	uint32_t i;
+
+	spa_pod_builder_push_choice(&b, &f, choice_type, flags);
+
+	for (i = 0; i < n_elems; i++)
+	{
+		spa_pod_builder_float(&b, elems[i]);
+	}
+
+	return spa_pod_builder_pop(&b, &f);
+}
+
+struct spa_pod *build_choice_f64(uint8_t *buffer, size_t len, uint32_t choice_type, uint32_t flags, uint32_t n_elems, double *elems)
+{
+	struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, len);
+	struct spa_pod_frame f;
+	uint32_t i;
+
+	spa_pod_builder_push_choice(&b, &f, choice_type, flags);
+
+	for (i = 0; i < n_elems; i++)
+	{
+		spa_pod_builder_double(&b, elems[i]);
+	}
+
+	return spa_pod_builder_pop(&b, &f);
+}
+
+struct spa_pod *build_choice_id(uint8_t *buffer, size_t len, uint32_t choice_type, uint32_t flags, uint32_t n_elems, uint32_t *elems)
+{
+	struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, len);
+	struct spa_pod_frame f;
+	uint32_t i;
+
+	spa_pod_builder_push_choice(&b, &f, choice_type, flags);
+
+	for (i = 0; i < n_elems; i++)
+	{
+		spa_pod_builder_id(&b, elems[i]);
+	}
+
+	return spa_pod_builder_pop(&b, &f);
+}
+
+struct spa_pod *build_choice_rectangle(uint8_t *buffer, size_t len, uint32_t choice_type, uint32_t flags, uint32_t n_elems, uint32_t *elems)
+{
+	struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, len);
+	struct spa_pod_frame f;
+	uint32_t i;
+
+	assert(n_elems % 2 == 0); // elements are actually (width, height) pairs
+
+	spa_pod_builder_push_choice(&b, &f, choice_type, flags);
+
+	for (i = 0; i < n_elems; i += 2)
+	{
+		spa_pod_builder_rectangle(&b, elems[i], elems[i + 1]);
+	}
+
+	return spa_pod_builder_pop(&b, &f);
+}
+
+struct spa_pod *build_choice_fraction(uint8_t *buffer, size_t len, uint32_t choice_type, uint32_t flags, uint32_t n_elems, uint32_t *elems)
+{
+	struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, len);
+	struct spa_pod_frame f;
+	uint32_t i;
+
+	assert(n_elems % 2 == 0); // elements are actually (num, denom) pairs
+
+	spa_pod_builder_push_choice(&b, &f, choice_type, flags);
+
+	for (i = 0; i < n_elems; i += 2)
+	{
+		spa_pod_builder_fraction(&b, elems[i], elems[i + 1]);
+	}
+
+	return spa_pod_builder_pop(&b, &f);
+}
+
+struct spa_pod *build_choice_fd(uint8_t *buffer, size_t len, uint32_t choice_type, uint32_t flags, uint32_t n_elems, int64_t *elems)
+{
+	struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, len);
+	struct spa_pod_frame f;
+	uint32_t i;
+
+	spa_pod_builder_push_choice(&b, &f, choice_type, flags);
+
+	for (i = 0; i < n_elems; i++)
+	{
+		spa_pod_builder_fd(&b, elems[i]);
+	}
+
+	return spa_pod_builder_pop(&b, &f);
 }
 
 void print_pod(const struct spa_pod *pod)
