@@ -1153,4 +1153,37 @@ fn object() {
             })
         ))
     );
+
+    // serialization
+    impl PodSerialize for MyProps {
+        fn serialize<O: std::io::Write + std::io::Seek>(
+            &self,
+            serializer: PodSerializer<O>,
+        ) -> Result<SerializeSuccess<O>, cookie_factory::GenError> {
+            let mut obj_serializer = serializer.serialize_object(
+                spa_sys::SPA_TYPE_OBJECT_Props,
+                spa_sys::spa_param_type_SPA_PARAM_Props,
+            )?;
+
+            obj_serializer.serialize_property(
+                spa_sys::spa_prop_SPA_PROP_device,
+                "hw:0",
+                PropertyFlags::empty(),
+            )?;
+            obj_serializer.serialize_property(
+                spa_sys::spa_prop_SPA_PROP_frequency,
+                &440.0_f32,
+                PropertyFlags::empty(),
+            )?;
+
+            obj_serializer.end()
+        }
+    }
+
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &props)
+        .unwrap()
+        .0
+        .into_inner();
+
+    assert_eq!(vec_rs, vec_c);
 }

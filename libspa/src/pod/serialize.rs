@@ -26,7 +26,7 @@ use cookie_factory::{
     SerializeFn,
 };
 
-use super::{CanonicalFixedSizedPod, FixedSizedPod};
+use super::{CanonicalFixedSizedPod, FixedSizedPod, PropertyFlags};
 
 /// Implementors of this trait are able to serialize themselves into a SPA pod by using a [`PodSerializer`].
 ///
@@ -316,6 +316,30 @@ impl<O: Write + Seek> PodSerializer<O> {
             written: 0,
         })
     }
+
+    /// Begin serializing an `Object` pod.
+    pub fn serialize_object(
+        mut self,
+        object_type: u32,
+        object_id: u32,
+    ) -> Result<ObjectPodSerializer<O>, GenError> {
+        let header_position = self
+            .out
+            .as_mut()
+            .expect("PodSerializer does not contain a writer")
+            .stream_position()
+            .expect("Could not get current position in writer");
+
+        // Write a size of 0 for now, this will be updated when calling `ObjectPodSerializer.end()`.
+        self.gen(Self::header(0, spa_sys::SPA_TYPE_Object))?;
+        self.gen(pair(ne_u32(object_type), ne_u32(object_id)))?;
+
+        Ok(ObjectPodSerializer {
+            serializer: Some(self),
+            header_position,
+            written: 0,
+        })
+    }
 }
 
 /// This struct handles serializing arrays.
@@ -446,6 +470,88 @@ impl<O: Write + Seek> StructPodSerializer<O> {
         Ok(SerializeSuccess {
             serializer,
             len: self.written as u64 + 8,
+        })
+    }
+}
+
+/// This struct handles serializing objects.
+///
+/// It can be obtained by calling [`PodSerializer::serialize_object`].
+///
+/// Its [`serialize_property`](`Self::serialize_property`) method can be repeatedly called to serialize each property.
+/// To finalize the object, its [`end`](`Self::end`) method must be called.
+pub struct ObjectPodSerializer<O: Write + Seek> {
+    /// The serializer is saved in an option, but can be expected to always be a `Some`
+    /// when `serialize_field()` or `end()` is called.
+    ///
+    /// `serialize_property()` `take()`s the serializer, uses it to serialize the property,
+    /// and then puts the serializer back inside.
+    serializer: Option<PodSerializer<O>>,
+    /// The position to seek to when modifying header.
+    header_position: u64,
+    written: usize,
+}
+
+impl<O: Write + Seek> ObjectPodSerializer<O> {
+    /// Serialize a single property of the object.
+    ///
+    /// Returns the amount of bytes written for this field.
+    pub fn serialize_property<P>(
+        &mut self,
+        key: u32,
+        value: &P,
+        flags: PropertyFlags,
+    ) -> Result<u64, GenError>
+    where
+        P: PodSerialize + ?Sized,
+    {
+        let mut serializer = self
+            .serializer
+            .take()
+            .expect("ObjectPodSerializer does not contain a serializer");
+
+        serializer.gen(pair(ne_u32(key), ne_u32(flags.bits())))?;
+        let mut success = value.serialize(serializer)?;
+        success.len += 8; // add the key and flags len
+
+        self.written += success.len as usize;
+        self.serializer = Some(success.serializer);
+
+        Ok(success.len)
+    }
+
+    /// Finish serialization of the pod.
+    pub fn end(self) -> Result<SerializeSuccess<O>, GenError> {
+        let mut serializer = self
+            .serializer
+            .expect("ObjectSerializer does not contain a serializer");
+
+        // Seek to header position, write header with updates size, seek back.
+        serializer
+            .out
+            .as_mut()
+            .expect("Serializer does not contain a writer")
+            .seek(SeekFrom::Start(self.header_position))
+            .expect("Failed to seek to header position");
+
+        // size of properties + object type + object id
+        let written = self.written + 8;
+
+        serializer.gen(PodSerializer::header(written, spa_sys::SPA_TYPE_Object))?;
+
+        serializer
+            .out
+            .as_mut()
+            .expect("Serializer does not contain a writer")
+            .seek(SeekFrom::End(0))
+            .expect("Failed to seek to end");
+
+        // No padding needed: Last field will already end aligned.
+
+        // Return full length of written pod.
+        Ok(SerializeSuccess {
+            serializer,
+            len: written as u64,
         })
     }
 }
