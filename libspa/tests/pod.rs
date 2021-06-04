@@ -58,10 +58,15 @@ fn none() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &Value::None)
+        .unwrap()
+        .0
+        .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 8];
     assert_eq!(unsafe { c::build_none(vec_c.as_mut_ptr(), vec_c.len()) }, 0);
 
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
@@ -81,12 +86,17 @@ fn bool_true() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &Value::Bool(true))
+        .unwrap()
+        .0
+        .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 16];
     assert_eq!(
         unsafe { c::build_bool(vec_c.as_mut_ptr(), vec_c.len(), 1) },
         0
     );
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
@@ -106,6 +116,11 @@ fn bool_false() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val: Vec<u8> =
+        PodSerializer::serialize(Cursor::new(Vec::new()), &Value::Bool(false))
+            .unwrap()
+            .0
+            .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 16];
     assert_eq!(
         unsafe { c::build_bool(vec_c.as_mut_ptr(), vec_c.len(), 0) },
@@ -113,6 +128,7 @@ fn bool_false() {
     );
 
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
@@ -134,6 +150,10 @@ fn int() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &Value::Int(int))
+        .unwrap()
+        .0
+        .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 16];
     assert_eq!(
         unsafe { c::build_int(vec_c.as_mut_ptr(), vec_c.len(), int) },
@@ -141,6 +161,7 @@ fn int() {
     );
 
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
@@ -162,6 +183,10 @@ fn long() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &Value::Long(long))
+        .unwrap()
+        .0
+        .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 16];
     assert_eq!(
         unsafe { c::build_long(vec_c.as_mut_ptr(), vec_c.len(), long) },
@@ -169,6 +194,7 @@ fn long() {
     );
 
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
@@ -190,6 +216,11 @@ fn float() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val: Vec<u8> =
+        PodSerializer::serialize(Cursor::new(Vec::new()), &Value::Float(float))
+            .unwrap()
+            .0
+            .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 16];
     assert_eq!(
         unsafe { c::build_float(vec_c.as_mut_ptr(), vec_c.len(), float) },
@@ -197,6 +228,7 @@ fn float() {
     );
 
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
@@ -218,6 +250,11 @@ fn double() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val: Vec<u8> =
+        PodSerializer::serialize(Cursor::new(Vec::new()), &Value::Double(double))
+            .unwrap()
+            .0
+            .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 16];
     assert_eq!(
         unsafe { c::build_double(vec_c.as_mut_ptr(), vec_c.len(), double) },
@@ -225,6 +262,7 @@ fn double() {
     );
 
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
@@ -246,6 +284,11 @@ fn string() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val: Vec<u8> =
+        PodSerializer::serialize(Cursor::new(Vec::new()), &Value::String(string.to_owned()))
+            .unwrap()
+            .0
+            .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 16];
     let c_string = CString::new(string).unwrap();
     assert_eq!(
@@ -259,6 +302,7 @@ fn string() {
         0
     );
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     // Zero-copy deserializing.
     assert_eq!(
@@ -288,6 +332,11 @@ fn string_no_padding() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val: Vec<u8> =
+        PodSerializer::serialize(Cursor::new(Vec::new()), &Value::String(string.to_owned()))
+            .unwrap()
+            .0
+            .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 16];
     let c_string = CString::new(string).unwrap();
     assert_eq!(
@@ -301,6 +350,7 @@ fn string_no_padding() {
         0
     );
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     // Zero-copy deserializing.
     assert_eq!(
@@ -330,6 +380,12 @@ fn string_empty() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val: Vec<u8> =
+        PodSerializer::serialize(Cursor::new(Vec::new()), &Value::String(string.to_owned()))
+            .unwrap()
+            .0
+            .into_inner();
+
     let c_string = CString::new(string).unwrap();
     assert_eq!(
         unsafe {
@@ -342,6 +398,7 @@ fn string_empty() {
         0
     );
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     // Zero-copy deserializing.
     assert_eq!(
@@ -370,12 +427,18 @@ fn bytes() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val: Vec<u8> =
+        PodSerializer::serialize(Cursor::new(Vec::new()), &Value::Bytes(bytes.to_vec()))
+            .unwrap()
+            .0
+            .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 16];
     assert_eq!(
         unsafe { c::build_bytes(vec_c.as_mut_ptr(), vec_c.len(), bytes.as_ptr(), bytes.len()) },
         0
     );
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     // Zero-copy deserializing.
     assert_eq!(
@@ -405,12 +468,18 @@ fn bytes_no_padding() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val: Vec<u8> =
+        PodSerializer::serialize(Cursor::new(Vec::new()), &Value::Bytes(bytes.to_vec()))
+            .unwrap()
+            .0
+            .into_inner();
     let mut vec_c = vec![0; 16];
     assert_eq!(
         unsafe { c::build_bytes(vec_c.as_mut_ptr(), vec_c.len(), bytes.as_ptr(), bytes.len()) },
         0
     );
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     // Zero-copy deserializing.
     assert_eq!(
@@ -440,11 +509,18 @@ fn bytes_empty() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val: Vec<u8> =
+        PodSerializer::serialize(Cursor::new(Vec::new()), &Value::Bytes(bytes.to_vec()))
+            .unwrap()
+            .0
+            .into_inner();
+
     assert_eq!(
         unsafe { c::build_bytes(vec_c.as_mut_ptr(), vec_c.len(), bytes.as_ptr(), bytes.len()) },
         0
     );
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     // Zero-copy deserializing.
     assert_eq!(
@@ -476,9 +552,14 @@ fn rectangle() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val = PodSerializer::serialize(Cursor::new(Vec::new()), &Value::Rectangle(rect))
+        .unwrap()
+        .0
+        .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 16];
     unsafe { c::build_rectangle(vec_c.as_mut_ptr(), vec_c.len(), rect.width, rect.height) };
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
@@ -500,6 +581,10 @@ fn fraction() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val = PodSerializer::serialize(Cursor::new(Vec::new()), &Value::Fraction(fraction))
+        .unwrap()
+        .0
+        .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 16];
     unsafe {
         c::build_fraction(
@@ -510,6 +595,7 @@ fn fraction() {
         )
     };
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
@@ -532,6 +618,13 @@ fn array_i32() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(
+        Cursor::new(Vec::new()),
+        &Value::ValueArray(ValueArray::Int(array.clone())),
+    )
+    .unwrap()
+    .0
+    .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 32];
     unsafe {
         c::build_array(
@@ -544,6 +637,7 @@ fn array_i32() {
         )
     };
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
@@ -565,6 +659,13 @@ fn array_bool() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(
+        Cursor::new(Vec::new()),
+        &Value::ValueArray(ValueArray::Bool(array.clone())),
+    )
+    .unwrap()
+    .0
+    .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 24];
     unsafe {
         c::build_array(
@@ -577,6 +678,7 @@ fn array_bool() {
         )
     };
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
@@ -598,6 +700,13 @@ fn array_empty() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(
+        Cursor::new(Vec::new()),
+        &Value::ValueArray(ValueArray::None(array.clone())),
+    )
+    .unwrap()
+    .0
+    .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 16];
     unsafe {
         c::build_array(
@@ -610,6 +719,7 @@ fn array_empty() {
         )
     };
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
@@ -631,6 +741,13 @@ fn array_id() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(
+        Cursor::new(Vec::new()),
+        &Value::ValueArray(ValueArray::Id(array.clone())),
+    )
+    .unwrap()
+    .0
+    .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 24];
     unsafe {
         c::build_array(
@@ -643,6 +760,7 @@ fn array_id() {
         )
     };
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
@@ -664,6 +782,13 @@ fn array_long() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(
+        Cursor::new(Vec::new()),
+        &Value::ValueArray(ValueArray::Long(array.clone())),
+    )
+    .unwrap()
+    .0
+    .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 40];
     unsafe {
         c::build_array(
@@ -676,6 +801,7 @@ fn array_long() {
         )
     };
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
@@ -697,6 +823,13 @@ fn array_float() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(
+        Cursor::new(Vec::new()),
+        &Value::ValueArray(ValueArray::Float(array.clone())),
+    )
+    .unwrap()
+    .0
+    .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 24];
     unsafe {
         c::build_array(
@@ -709,6 +842,7 @@ fn array_float() {
         )
     };
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
@@ -730,6 +864,13 @@ fn array_double() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(
+        Cursor::new(Vec::new()),
+        &Value::ValueArray(ValueArray::Double(array.clone())),
+    )
+    .unwrap()
+    .0
+    .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 32];
     unsafe {
         c::build_array(
@@ -742,6 +883,7 @@ fn array_double() {
         )
     };
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
@@ -772,6 +914,13 @@ fn array_rectangle() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(
+        Cursor::new(Vec::new()),
+        &Value::ValueArray(ValueArray::Rectangle(array.clone())),
+    )
+    .unwrap()
+    .0
+    .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 32];
     unsafe {
         c::build_array(
@@ -784,6 +933,7 @@ fn array_rectangle() {
         )
     };
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
@@ -808,6 +958,13 @@ fn array_fraction() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(
+        Cursor::new(Vec::new()),
+        &Value::ValueArray(ValueArray::Fraction(array.clone())),
+    )
+    .unwrap()
+    .0
+    .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 32];
     unsafe {
         c::build_array(
@@ -820,6 +977,7 @@ fn array_fraction() {
         )
     };
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
@@ -841,6 +999,13 @@ fn array_fd() {
         .unwrap()
         .0
         .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(
+        Cursor::new(Vec::new()),
+        &Value::ValueArray(ValueArray::Fd(array.clone())),
+    )
+    .unwrap()
+    .0
+    .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 32];
     unsafe {
         c::build_array(
@@ -853,6 +1018,7 @@ fn array_fd() {
         )
     };
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
@@ -975,18 +1141,30 @@ impl<'a, 'de> PodDeserialize<'de> for NestedStruct {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn struct_() {
-    let struct_ = TestStruct {
-        int: 313,
-        string: "foo",
-        nested: NestedStruct {
-            rect: Rectangle {
-                width: 31,
-                height: 14,
-            },
-        },
+    const INT: i32 = 313;
+    const STR: &str = "foo";
+    const RECT: Rectangle = Rectangle {
+        width: 31,
+        height: 14,
     };
 
+    let struct_ = TestStruct {
+        int: INT,
+        string: STR,
+        nested: NestedStruct { rect: RECT },
+    };
+
+    let struct_val = Value::Struct(vec![
+        Value::Int(INT),
+        Value::String(STR.to_owned()),
+        Value::Struct(vec![Value::Rectangle(RECT)]),
+    ]);
+
     let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &struct_)
+        .unwrap()
+        .0
+        .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &struct_val)
         .unwrap()
         .0
         .into_inner();
@@ -1003,6 +1181,7 @@ fn struct_() {
         )
     };
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
@@ -1011,73 +1190,73 @@ fn struct_() {
 
     assert_eq!(
         PodDeserializer::deserialize_any_from(&vec_rs),
-        Ok((
-            &[] as &[u8],
-            Value::Struct(vec![
-                Value::Int(313),
-                Value::String("foo".into()),
-                Value::Struct(vec![Value::Rectangle(Rectangle {
-                    width: 31,
-                    height: 14
-                })])
-            ])
-        ))
+        Ok((&[] as &[u8], struct_val))
     );
 }
 
 #[test]
 #[cfg_attr(miri, ignore)]
 fn id() {
-    let id = Id(7);
+    const ID: Id = Id(7);
 
-    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &id)
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &ID)
+        .unwrap()
+        .0
+        .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &Value::Id(ID))
         .unwrap()
         .0
         .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 16];
     assert_eq!(
-        unsafe { c::build_id(vec_c.as_mut_ptr(), vec_c.len(), id.0) },
+        unsafe { c::build_id(vec_c.as_mut_ptr(), vec_c.len(), ID.0) },
         0
     );
 
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
-        Ok((&[] as &[u8], id))
+        Ok((&[] as &[u8], ID))
     );
 
     assert_eq!(
         PodDeserializer::deserialize_any_from(&vec_rs),
-        Ok((&[] as &[u8], Value::Id(id)))
+        Ok((&[] as &[u8], Value::Id(ID)))
     );
 }
 
 #[test]
 #[cfg_attr(miri, ignore)]
 fn fd() {
-    let fd = Fd(7);
+    const FD: Fd = Fd(7);
 
-    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &fd)
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &FD)
+        .unwrap()
+        .0
+        .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &Value::Fd(FD))
         .unwrap()
         .0
         .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 16];
     assert_eq!(
-        unsafe { c::build_fd(vec_c.as_mut_ptr(), vec_c.len(), fd.0) },
+        unsafe { c::build_fd(vec_c.as_mut_ptr(), vec_c.len(), FD.0) },
         0
     );
 
     assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
-        Ok((&[] as &[u8], fd))
+        Ok((&[] as &[u8], FD))
     );
 
     assert_eq!(
         PodDeserializer::deserialize_any_from(&vec_rs),
-        Ok((&[] as &[u8], Value::Fd(fd)))
+        Ok((&[] as &[u8], Value::Fd(FD)))
     );
 }
 

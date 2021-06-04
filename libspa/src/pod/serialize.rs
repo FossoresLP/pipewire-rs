@@ -26,7 +26,7 @@ use cookie_factory::{
     SerializeFn,
 };
 
-use super::{CanonicalFixedSizedPod, FixedSizedPod, PropertyFlags};
+use super::{CanonicalFixedSizedPod, FixedSizedPod, PropertyFlags, Value, ValueArray};
 
 /// Implementors of this trait are able to serialize themselves into a SPA pod by using a [`PodSerializer`].
 ///
@@ -126,6 +126,67 @@ impl PodSerialize for [u8] {
         serializer: PodSerializer<O>,
     ) -> Result<SerializeSuccess<O>, GenError> {
         serializer.serialize_bytes(self)
+    }
+}
+
+// Serialize into the kind of pod represented by the value.
+impl PodSerialize for Value {
+    fn serialize<O: Write + Seek>(
+        &self,
+        serializer: PodSerializer<O>,
+    ) -> Result<SerializeSuccess<O>, GenError> {
+        /// Helper function that fully serializes an array containing FixedSizedPod elements.
+        fn serialize_array<E: FixedSizedPod, O: Write + Seek>(
+            array: &[E],
+            serializer: PodSerializer<O>,
+        ) -> Result<SerializeSuccess<O>, GenError> {
+            let mut arr_serializer = serializer.serialize_array(array.len() as u32)?;
+            for e in array.iter() {
+                arr_serializer.serialize_element(e)?;
+            }
+            arr_serializer.end()
+        }
+
+        match self {
+            Value::None => serializer.serialized_fixed_sized_pod(&()),
+            Value::Bool(b) => serializer.serialized_fixed_sized_pod(b),
+            Value::Id(id) => serializer.serialized_fixed_sized_pod(id),
+            Value::Int(i) => serializer.serialized_fixed_sized_pod(i),
+            Value::Long(l) => serializer.serialized_fixed_sized_pod(l),
+            Value::Float(f) => serializer.serialized_fixed_sized_pod(f),
+            Value::Double(d) => serializer.serialized_fixed_sized_pod(d),
+            Value::String(s) => serializer.serialize_string(s.as_str()),
+            Value::Bytes(b) => serializer.serialize_bytes(b.as_slice()),
+            Value::Rectangle(rect) => serializer.serialized_fixed_sized_pod(rect),
+            Value::Fraction(frac) => serializer.serialized_fixed_sized_pod(frac),
+            Value::Fd(fd) => serializer.serialized_fixed_sized_pod(fd),
+            Value::ValueArray(array) => match array {
+                ValueArray::None(arr) => serialize_array(arr, serializer),
+                ValueArray::Bool(arr) => serialize_array(arr, serializer),
+                ValueArray::Id(arr) => serialize_array(arr, serializer),
+                ValueArray::Int(arr) => serialize_array(arr, serializer),
+                ValueArray::Long(arr) => serialize_array(arr, serializer),
+                ValueArray::Float(arr) => serialize_array(arr, serializer),
+                ValueArray::Double(arr) => serialize_array(arr, serializer),
+                ValueArray::Rectangle(arr) => serialize_array(arr, serializer),
+                ValueArray::Fraction(arr) => serialize_array(arr, serializer),
+                ValueArray::Fd(arr) => serialize_array(arr, serializer),
+            },
+            Value::Struct(array) => {
+                let mut struct_serializer = serializer.serialize_struct()?;
+                for elem in array.iter() {
+                    struct_serializer.serialize_field(elem)?;
+                }
+                struct_serializer.end()
+            }
+            Value::Object(object) => {
+                let mut object_serializer = serializer.serialize_object(object.type_, object.id)?;
+                for prop in object.properties.iter() {
+                    object_serializer.serialize_property(prop.key, &prop.value, prop.flags)?;
+                }
+                object_serializer.end()
+            }
+        }
     }
 }
 
