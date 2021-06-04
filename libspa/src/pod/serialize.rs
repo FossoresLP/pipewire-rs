@@ -382,8 +382,8 @@ impl<O: Write + Seek, P: FixedSizedPod> ArrayPodSerializer<O, P> {
 ///
 /// It can be obtained by calling [`PodSerializer::serialize_struct`].
 ///
-/// Its [`serialize_field`}(`Self::serialize_field`) method can be repeatedly called to serialize one field each.
-/// To finalize the struct, its [`end`}(`Self::end`) method must be called.
+/// Its [`serialize_field`](`Self::serialize_field`) method can be repeatedly called to serialize one field each.
+/// To finalize the struct, its [`end`](`Self::end`) method must be called.
 pub struct StructPodSerializer<O: Write + Seek> {
     /// The serializer is saved in an option, but can be expected to always be a `Some`
     /// when `serialize_field()` or `end()` is called.
