@@ -46,7 +46,7 @@ pub mod c {
             rect_height: u32,
         ) -> *const spa_pod;
         pub fn build_fd(buffer: *mut u8, len: usize, fd: i64) -> i32;
-        pub fn build_test_object(buffer: *mut u8, len: usize);
+        pub fn build_test_object(buffer: *mut u8, len: usize) -> *const spa_pod;
         pub fn print_pod(pod: *const spa_pod);
     }
 }
@@ -1171,14 +1171,17 @@ fn struct_() {
     let mut vec_c: Vec<u8> = vec![0; 64];
     let c_string = CString::new(struct_.string).unwrap();
     unsafe {
-        c::build_test_struct(
-            vec_c.as_mut_ptr(),
-            vec_c.len(),
-            struct_.int,
-            c_string.as_bytes_with_nul().as_ptr(),
-            struct_.nested.rect.width,
-            struct_.nested.rect.height,
-        )
+        assert_ne!(
+            c::build_test_struct(
+                vec_c.as_mut_ptr(),
+                vec_c.len(),
+                struct_.int,
+                c_string.as_bytes_with_nul().as_ptr(),
+                struct_.nested.rect.width,
+                struct_.nested.rect.height,
+            ),
+            std::ptr::null()
+        );
     };
     assert_eq!(vec_rs, vec_c);
     assert_eq!(vec_rs_val, vec_c);
@@ -1265,7 +1268,10 @@ fn fd() {
 fn object() {
     let mut vec_c: Vec<u8> = vec![0; 64];
     unsafe {
-        c::build_test_object(vec_c.as_mut_ptr(), vec_c.len());
+        assert_ne!(
+            c::build_test_object(vec_c.as_mut_ptr(), vec_c.len()),
+            std::ptr::null()
+        );
     }
 
     #[derive(Debug)]
