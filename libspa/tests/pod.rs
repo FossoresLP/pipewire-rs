@@ -653,7 +653,9 @@ fn array_i32() {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn array_bool() {
-    let array = vec![true, false];
+    let array = vec![false, true];
+    // encode the bools on 4 bytes
+    let array_u32: Vec<u32> = array.iter().map(|b| if *b { 1 } else { 0 }).collect();
 
     let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), array.as_slice())
         .unwrap()
@@ -673,8 +675,8 @@ fn array_bool() {
             vec_c.len(),
             <bool as CanonicalFixedSizedPod>::SIZE,
             spa_sys::SPA_TYPE_Bool,
-            array.len() as u32,
-            array.as_ptr() as *const u8,
+            array_u32.len() as u32,
+            array_u32.as_ptr() as *const u8,
         )
     };
     assert_eq!(vec_rs, vec_c);
