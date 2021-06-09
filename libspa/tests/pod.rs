@@ -10,7 +10,7 @@ use libspa::{
     },
     utils::{Fd, Fraction, Id, Rectangle},
 };
-use std::{ffi::CString, io::Cursor};
+use std::{ffi::CString, io::Cursor, ptr};
 
 pub mod c {
     #[allow(non_camel_case_types)]
@@ -1033,7 +1033,7 @@ fn array_fd() {
     );
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 struct TestStruct<'s> {
     // Fixed sized pod with padding.
     int: i32,
@@ -1043,7 +1043,7 @@ struct TestStruct<'s> {
     nested: NestedStruct,
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 struct NestedStruct {
     rect: Rectangle,
 }
@@ -1172,30 +1172,32 @@ fn struct_() {
         .into_inner();
     let mut vec_c: Vec<u8> = vec![0; 64];
     let c_string = CString::new(struct_.string).unwrap();
-    unsafe {
-        assert_ne!(
-            c::build_test_struct(
-                vec_c.as_mut_ptr(),
-                vec_c.len(),
-                struct_.int,
-                c_string.as_bytes_with_nul().as_ptr(),
-                struct_.nested.rect.width,
-                struct_.nested.rect.height,
-            ),
-            std::ptr::null()
-        );
+    let ptr = unsafe {
+        c::build_test_struct(
+            vec_c.as_mut_ptr(),
+            vec_c.len(),
+            struct_.int,
+            c_string.as_bytes_with_nul().as_ptr(),
+            struct_.nested.rect.width,
+            struct_.nested.rect.height,
+        )
     };
     assert_eq!(vec_rs, vec_c);
     assert_eq!(vec_rs_val, vec_c);
 
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_rs),
-        Ok((&[] as &[u8], struct_))
+        Ok((&[] as &[u8], struct_.clone()))
     );
 
     assert_eq!(
         PodDeserializer::deserialize_any_from(&vec_rs),
         Ok((&[] as &[u8], struct_val))
+    );
+
+    assert_eq!(
+        unsafe { PodDeserializer::deserialize_ptr(ptr::NonNull::new(ptr as *mut _).unwrap()) },
+        Ok(struct_)
     );
 }
 
@@ -1269,14 +1271,9 @@ fn fd() {
 #[cfg_attr(miri, ignore)]
 fn object() {
     let mut vec_c: Vec<u8> = vec![0; 64];
-    unsafe {
-        assert_ne!(
-            c::build_test_object(vec_c.as_mut_ptr(), vec_c.len()),
-            std::ptr::null()
-        );
-    }
+    let ptr = unsafe { c::build_test_object(vec_c.as_mut_ptr(), vec_c.len()) };
 
-    #[derive(Debug)]
+    #[derive(Debug, PartialEq)]
     struct MyProps {
         device: String,
         frequency: f32,
@@ -1317,6 +1314,12 @@ fn object() {
     assert_eq!(props.device, "hw:0");
     // clippy does not like comparing f32, see https://rust-lang.github.io/rust-clippy/master/#float_cmp
     assert!((props.frequency - 440.0_f32).abs() < f32::EPSILON);
+
+    let props2 = unsafe {
+        PodDeserializer::deserialize_ptr::<MyProps>(ptr::NonNull::new(ptr as *mut _).unwrap())
+            .unwrap()
+    };
+    assert_eq!(props, props2);
 
     assert_eq!(
         PodDeserializer::deserialize_any_from(&vec_c),

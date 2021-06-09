@@ -9,7 +9,7 @@
 //! You can also implement the [`PodDeserialize`] trait on another type yourself. See the traits documentation for more
 //! information on how to do that.
 
-use std::{convert::Infallible, marker::PhantomData};
+use std::{convert::Infallible, marker::PhantomData, ptr};
 
 use nom::{
     bytes::complete::{tag, take},
@@ -238,6 +238,23 @@ impl<'de, 'a> PodDeserializer<'de> {
     ) -> Result<(&'de [u8], P), DeserializeError<&'de [u8]>> {
         let deserializer = Self { input };
         P::deserialize(deserializer).map(|(res, success)| (success.0.input, res))
+    }
+
+    /// Deserialize a `spa_sys::spa_pod` pointer.
+    ///
+    /// # Safety
+    ///
+    /// - The provided pointer must point to a valid, well-aligned `spa_pod` struct.
+    /// - The pod pointed to must be kept valid for the entire lifetime of the deserialized object if
+    //    it has been created using zero-copy deserialization.
+    pub unsafe fn deserialize_ptr<P: PodDeserialize<'de>>(
+        ptr: ptr::NonNull<spa_sys::spa_pod>,
+    ) -> Result<P, DeserializeError<&'de [u8]>> {
+        let len = ptr.as_ref().size;
+        let pod = ptr.as_ptr() as *const _ as *const u8;
+        let slice = std::slice::from_raw_parts(pod, len as usize + 8);
+        let res = PodDeserializer::deserialize_from(slice)?;
+        Ok(res.1)
     }
 
     /// Execute the provide parse function, returning the parsed value or an error.
