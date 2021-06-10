@@ -3,7 +3,7 @@
 
 //! This file is a rustic interpretation of the the [PipeWire Tutorial 5][tut]
 //!
-//! tut: https://gitlab.freedesktop.org/pipewire/pipewire/-/blob/master/doc/tutorial5.md
+//! tut: https://docs.pipewire.org/page_tutorial5.html
 
 use pipewire as pw;
 use pw::prelude::*;
