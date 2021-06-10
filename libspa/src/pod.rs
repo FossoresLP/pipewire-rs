@@ -10,7 +10,10 @@
 pub mod deserialize;
 pub mod serialize;
 
-use std::io::{Seek, Write};
+use std::{
+    ffi::c_void,
+    io::{Seek, Write},
+};
 
 use bitflags::bitflags;
 use cookie_factory::{
@@ -36,7 +39,8 @@ use crate::utils::{Choice, Fd, Fraction, Id, Rectangle};
 use self::deserialize::{
     ChoiceDoubleVisitor, ChoiceFdVisitor, ChoiceFloatVisitor, ChoiceFractionVisitor,
     ChoiceIdVisitor, ChoiceIntVisitor, ChoiceLongVisitor, ChoiceRectangleVisitor, DoubleVisitor,
-    FdVisitor, FloatVisitor, FractionVisitor, IdVisitor, IntVisitor, LongVisitor, RectangleVisitor,
+    FdVisitor, FloatVisitor, FractionVisitor, IdVisitor, IntVisitor, LongVisitor, PointerVisitor,
+    RectangleVisitor,
 };
 
 /// Implementors of this trait are the canonical representation of a specific type of fixed sized SPA pod.
@@ -575,6 +579,20 @@ impl<'de> PodDeserialize<'de> for Choice<Fd> {
     }
 }
 
+impl<'de, T> PodDeserialize<'de> for (u32, *const T) {
+    fn deserialize(
+        deserializer: PodDeserializer<'de>,
+    ) -> Result<
+        (Self, deserialize::DeserializeSuccess<'de>),
+        deserialize::DeserializeError<&'de [u8]>,
+    >
+    where
+        Self: Sized,
+    {
+        deserializer.deserialize_pointer(PointerVisitor::<T>::default())
+    }
+}
+
 impl<'de> PodDeserialize<'de> for Value {
     fn deserialize(
         deserializer: PodDeserializer<'de>,
@@ -624,6 +642,8 @@ pub enum Value {
     Object(Object),
     /// a choice.
     Choice(ChoiceValue),
+    /// a pointer.
+    Pointer(u32, *const c_void),
 }
 
 /// an array of same type objects.

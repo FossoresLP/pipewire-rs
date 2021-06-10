@@ -18,7 +18,7 @@ use std::{
 
 pub use cookie_factory::GenError;
 use cookie_factory::{
-    bytes::{ne_u32, ne_u8},
+    bytes::{ne_u32, ne_u64, ne_u8},
     combinator::slice,
     gen,
     multi::all,
@@ -201,6 +201,7 @@ impl PodSerialize for Value {
                 ChoiceValue::Fraction(choice) => serializer.serialize_choice(choice),
                 ChoiceValue::Fd(choice) => serializer.serialize_choice(choice),
             },
+            Value::Pointer(type_, pointer) => serializer.serialize_pointer(*type_, *pointer),
         }
     }
 }
@@ -221,6 +222,15 @@ impl<P: FixedSizedPod> PodSerialize for [P] {
         }
 
         arr_serializer.end()
+    }
+}
+
+impl<T> PodSerialize for (u32, *const T) {
+    fn serialize<O: Write + Seek>(
+        &self,
+        serializer: PodSerializer<O>,
+    ) -> Result<SerializeSuccess<O>, GenError> {
+        serializer.serialize_pointer(self.0, self.1)
     }
 }
 
@@ -476,6 +486,30 @@ impl<O: Write + Seek> PodSerializer<O> {
         Ok(SerializeSuccess {
             serializer: self,
             len: len as u64 + pad_bytes,
+        })
+    }
+
+    /// Serialize a pointer pod.
+    pub fn serialize_pointer<T>(
+        mut self,
+        type_: u32,
+        ptr: *const T,
+    ) -> Result<SerializeSuccess<O>, GenError> {
+        let ptr_size = std::mem::size_of::<usize>();
+        let len = 8 + ptr_size;
+
+        let mut written = self.gen(Self::header(len, spa_sys::SPA_TYPE_Pointer))?;
+        written += self.gen(pair(ne_u32(type_), ne_u32(0)))?;
+
+        written += match ptr_size {
+            4 => self.gen(ne_u32(ptr as u32))?,
+            8 => self.gen(ne_u64(ptr as u64))?,
+            _ => panic!("unsupported pointer size {}", ptr_size),
+        };
+
+        Ok(SerializeSuccess {
+            serializer: self,
+            len: written,
         })
     }
 }

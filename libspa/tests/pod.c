@@ -242,6 +242,12 @@ struct spa_pod *build_choice_fd(uint8_t *buffer, size_t len, uint32_t choice_typ
 	return spa_pod_builder_pop(&b, &f);
 }
 
+int build_pointer(uint8_t *buffer, size_t len, uint32_t type, const void *val)
+{
+	struct spa_pod_builder b = SPA_POD_BUILDER_INIT(buffer, len);
+	return spa_pod_builder_pointer(&b, type, val);
+}
+
 void print_pod(const struct spa_pod *pod)
 {
 	spa_debug_pod(0, NULL, pod);

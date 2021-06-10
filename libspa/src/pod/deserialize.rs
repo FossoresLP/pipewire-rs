@@ -9,12 +9,12 @@
 //! You can also implement the [`PodDeserialize`] trait on another type yourself. See the traits documentation for more
 //! information on how to do that.
 
-use std::{convert::Infallible, marker::PhantomData, ptr};
+use std::{convert::Infallible, ffi::c_void, marker::PhantomData, ptr};
 
 use nom::{
     bytes::complete::{tag, take},
     combinator::{map, map_res, verify},
-    number::{complete::u32, Endianness},
+    number::{complete::u32, complete::u64, Endianness},
     sequence::{delimited, pair, preceded, terminated},
     IResult,
 };
@@ -751,6 +751,34 @@ impl<'de, 'a> PodDeserializer<'de> {
         }
     }
 
+    /// Deserialize a pointer pod.
+    pub fn deserialize_pointer<V>(
+        mut self,
+        visitor: V,
+    ) -> Result<(V::Value, DeserializeSuccess<'de>), DeserializeError<&'de [u8]>>
+    where
+        V: Visitor<'de>,
+    {
+        let len = self.parse(Self::header(spa_sys::SPA_TYPE_Pointer))?;
+        let (type_, _padding) =
+            self.parse(pair(u32(Endianness::Native), u32(Endianness::Native)))?;
+        let ptr_size = len - 8;
+
+        let res = match ptr_size {
+            8 => {
+                let ptr = self.parse(u64(Endianness::Native))?;
+                visitor.visit_pointer(type_, ptr as *const c_void)?
+            }
+            4 => {
+                let ptr = self.parse(u32(Endianness::Native))?;
+                visitor.visit_pointer(type_, ptr as *const c_void)?
+            }
+            _ => panic!("unsupported pointer size {}", ptr_size),
+        };
+
+        Ok((res, DeserializeSuccess(self)))
+    }
+
     /// Deserialize any kind of pod using a visitor producing [`Value`].
     pub fn deserialize_any(
         self,
@@ -774,6 +802,7 @@ impl<'de, 'a> PodDeserializer<'de> {
             spa_sys::SPA_TYPE_Array => self.deserialize_array_any(),
             spa_sys::SPA_TYPE_Object => self.deserialize_object(ValueVisitor),
             spa_sys::SPA_TYPE_Choice => self.deserialize_choice(ValueVisitor),
+            spa_sys::SPA_TYPE_Pointer => self.deserialize_pointer(ValueVisitor),
             _ => Err(DeserializeError::InvalidType),
         }
     }
@@ -1250,6 +1279,15 @@ pub trait Visitor<'de>: Sized {
     ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
         Err(DeserializeError::UnsupportedType)
     }
+
+    /// The input contains a pointer.
+    fn visit_pointer(
+        &self,
+        _type: u32,
+        _pointer: *const c_void,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Err(DeserializeError::UnsupportedType)
+    }
 }
 
 /// A visitor producing `()` for none values.
@@ -1561,6 +1599,14 @@ impl<'de> Visitor<'de> for ValueVisitor {
     ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
         Ok(Value::Choice(ChoiceValue::Fd(choice)))
     }
+
+    fn visit_pointer(
+        &self,
+        type_: u32,
+        pointer: *const c_void,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok(Value::Pointer(type_, pointer))
+    }
 }
 
 struct ValueArrayNoneVisitor;
@@ -1819,5 +1865,31 @@ impl<'de> Visitor<'de> for ChoiceFdVisitor {
         choice: Choice<Fd>,
     ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
         Ok(choice)
+    }
+}
+
+/// A visitor producing pointers for fd pointer values.
+pub struct PointerVisitor<T> {
+    _phantom: PhantomData<T>,
+}
+
+impl<T> Default for PointerVisitor<T> {
+    fn default() -> Self {
+        Self {
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<'de, T> Visitor<'de> for PointerVisitor<T> {
+    type Value = (u32, *const T);
+    type ArrayElem = Infallible;
+
+    fn visit_pointer(
+        &self,
+        type_: u32,
+        pointer: *const c_void,
+    ) -> Result<Self::Value, DeserializeError<&'de [u8]>> {
+        Ok((type_, pointer as *const T))
     }
 }

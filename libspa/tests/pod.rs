@@ -10,7 +10,11 @@ use libspa::{
     },
     utils::{Choice, ChoiceEnum, ChoiceFlags, Fd, Fraction, Id, Rectangle},
 };
-use std::{ffi::CString, io::Cursor, ptr};
+use std::{
+    ffi::{c_void, CString},
+    io::Cursor,
+    ptr,
+};
 
 pub mod c {
     #[allow(non_camel_case_types)]
@@ -111,6 +115,12 @@ pub mod c {
             n_elems: u32,
             elems: *const i64,
         ) -> *const spa_pod;
+        pub fn build_pointer(
+            buffer: *mut u8,
+            len: usize,
+            type_: u32,
+            val: *const std::ffi::c_void,
+        ) -> i32;
         pub fn print_pod(pod: *const spa_pod);
     }
 }
@@ -2090,5 +2100,51 @@ fn choice_extra_values() {
     assert_eq!(
         PodDeserializer::deserialize_from(&vec_c),
         Ok((&[] as &[u8], choice))
+    );
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn pointer() {
+    let val = 7;
+    let ptr = &val as *const i32;
+    const POINTER_TYPE: u32 = 10;
+    let vec_rs: Vec<u8> = PodSerializer::serialize(Cursor::new(Vec::new()), &(POINTER_TYPE, ptr))
+        .unwrap()
+        .0
+        .into_inner();
+    let vec_rs_val: Vec<u8> = PodSerializer::serialize(
+        Cursor::new(Vec::new()),
+        &Value::Pointer(POINTER_TYPE, ptr as *const c_void),
+    )
+    .unwrap()
+    .0
+    .into_inner();
+    let mut vec_c: Vec<u8> = vec![0; 24];
+    assert_eq!(
+        unsafe {
+            c::build_pointer(
+                vec_c.as_mut_ptr(),
+                vec_c.len(),
+                10,
+                ptr as *const std::ffi::c_void,
+            )
+        },
+        0
+    );
+    assert_eq!(vec_rs, vec_c);
+    assert_eq!(vec_rs_val, vec_c);
+
+    assert_eq!(
+        PodDeserializer::deserialize_from(&vec_rs),
+        Ok((&[] as &[u8], (POINTER_TYPE, ptr)))
+    );
+
+    assert_eq!(
+        PodDeserializer::deserialize_any_from(&vec_rs),
+        Ok((
+            &[] as &[u8],
+            Value::Pointer(POINTER_TYPE, ptr as *const c_void)
+        ))
     );
 }
