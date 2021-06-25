@@ -113,7 +113,7 @@ use std::ptr;
 
 mod error;
 pub use error::*;
-pub mod loop_;
+mod loop_;
 pub use loop_::*;
 mod main_loop;
 pub use main_loop::*;
