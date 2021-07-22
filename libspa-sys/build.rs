@@ -7,8 +7,7 @@ use std::path::PathBuf;
 fn main() {
     let libs = system_deps::Config::new()
         .probe()
-        .expect("Cannot find libspa");
-    let libspa = libs.get_by_name("libspa").unwrap();
+        .expect("Cannot find libraries");
 
     // Tell cargo to invalidate the built crate whenever the wrapper changes
     println!("cargo:rerun-if-changed=wrapper.h");
@@ -27,10 +26,13 @@ fn main() {
         .allowlist_var("SPA_.*")
         .derive_eq(true);
 
-    let builder = libspa.include_paths.iter().fold(builder, |builder, l| {
-        let arg = format!("-I{}", l.to_string_lossy());
-        builder.clang_arg(arg)
-    });
+    let builder = libs
+        .iter()
+        .flat_map(|(_, lib)| lib.include_paths.iter())
+        .fold(builder, |builder, l| {
+            let arg = format!("-I{}", l.to_string_lossy());
+            builder.clang_arg(arg)
+        });
 
     let bindings = builder.generate().expect("Unable to generate bindings");
 

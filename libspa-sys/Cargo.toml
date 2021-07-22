@@ -21,3 +21,4 @@ system-deps = "3.0"
 
 [package.metadata.system-deps]
  libspa = { name = "libspa-0.2", version = "0.2" }
+ libpipewire = { name = "libpipewire-0.3", version = "0.3" }

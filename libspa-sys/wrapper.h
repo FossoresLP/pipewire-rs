@@ -1,3 +1,5 @@
+#include <pipewire/version.h>
+
 #include <spa/utils/defs.h>
 #include <spa/utils/dict.h>
 #include <spa/utils/hook.h>
@@ -15,6 +17,9 @@
 #include <spa/support/loop.h>
 #include <spa/support/plugin.h>
 #include <spa/support/system.h>
+#if PW_CHECK_VERSION(0,3,32)
+#include <spa/support/thread.h>
+#endif
 #include <spa/node/command.h>
 #include <spa/node/event.h>
 #include <spa/node/io.h>
