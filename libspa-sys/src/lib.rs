@@ -6,6 +6,8 @@
 #![allow(non_snake_case)]
 
 #[allow(clippy::all)]
+// FIXME: Remove when https://github.com/rust-lang/rust-bindgen/issues/1651 is closed
+#[allow(deref_nullptr)]
 mod bindings {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
