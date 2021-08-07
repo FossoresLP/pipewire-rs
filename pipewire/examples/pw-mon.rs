@@ -108,7 +108,7 @@ fn monitor(remote: Option<String>) -> Result<()> {
             if let Some(registry) = registry_weak.upgrade() {
                 let p: Option<(Box<dyn ProxyT>, Box<dyn Listener>)> = match obj.type_ {
                     ObjectType::Node => {
-                        let node: Node = registry.bind(&obj).unwrap();
+                        let node: Node = registry.bind(obj).unwrap();
                         let obj_listener = node
                             .add_listener_local()
                             .info(|info| {
@@ -122,7 +122,7 @@ fn monitor(remote: Option<String>) -> Result<()> {
                         Some((Box::new(node), Box::new(obj_listener)))
                     }
                     ObjectType::Port => {
-                        let port: Port = registry.bind(&obj).unwrap();
+                        let port: Port = registry.bind(obj).unwrap();
                         let obj_listener = port
                             .add_listener_local()
                             .info(|info| {
@@ -136,7 +136,7 @@ fn monitor(remote: Option<String>) -> Result<()> {
                         Some((Box::new(port), Box::new(obj_listener)))
                     }
                     ObjectType::Link => {
-                        let link: Link = registry.bind(&obj).unwrap();
+                        let link: Link = registry.bind(obj).unwrap();
                         let obj_listener = link
                             .add_listener_local()
                             .info(|info| {

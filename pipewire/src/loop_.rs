@@ -63,7 +63,7 @@ pub unsafe trait Loop {
 
         IoSource {
             ptr,
-            loop_: &self,
+            loop_: self,
             _data: data,
         }
     }
@@ -112,7 +112,7 @@ pub unsafe trait Loop {
 
         SignalSource {
             ptr,
-            loop_: &self,
+            loop_: self,
             _data: data,
         }
     }
@@ -160,7 +160,7 @@ pub unsafe trait Loop {
 
         EventSource {
             ptr,
-            loop_: &self,
+            loop_: self,
             _data: data,
         }
     }
@@ -210,7 +210,7 @@ pub unsafe trait Loop {
 
         TimerSource {
             ptr,
-            loop_: &self,
+            loop_: self,
             _data: data,
         }
     }

@@ -206,7 +206,7 @@ impl Stream {
     }
 
     pub fn dequeue_buffer(&self) -> Option<Buffer> {
-        unsafe { Buffer::from_raw(self.dequeue_raw_buffer(), &self) }
+        unsafe { Buffer::from_raw(self.dequeue_raw_buffer(), self) }
     }
 
     /// Return a Buffer to the Stream
@@ -335,7 +335,7 @@ impl ListenerLocalCallbacks {
             new: pw_sys::pw_stream_state,
             error: *const os::raw::c_char,
         ) {
-            if let Some(ref state) = (data as *mut ListenerLocalCallbacks).as_ref() {
+            if let Some(state) = (data as *mut ListenerLocalCallbacks).as_ref() {
                 if let Some(ref cb) = state.state_changed {
                     let old = StreamState::from_raw(old, error);
                     let new = StreamState::from_raw(new, error);
@@ -349,7 +349,7 @@ impl ListenerLocalCallbacks {
             id: u32,
             control: *const pw_sys::pw_stream_control,
         ) {
-            if let Some(ref state) = (data as *mut ListenerLocalCallbacks).as_ref() {
+            if let Some(state) = (data as *mut ListenerLocalCallbacks).as_ref() {
                 if let Some(ref cb) = state.control_info {
                     cb(id, control);
                 }
@@ -362,7 +362,7 @@ impl ListenerLocalCallbacks {
             area: *mut os::raw::c_void,
             size: u32,
         ) {
-            if let Some(ref state) = (data as *mut ListenerLocalCallbacks).as_ref() {
+            if let Some(state) = (data as *mut ListenerLocalCallbacks).as_ref() {
                 if let Some(ref cb) = state.io_changed {
                     cb(id, area, size);
                 }
@@ -374,7 +374,7 @@ impl ListenerLocalCallbacks {
             id: u32,
             param: *const spa_sys::spa_pod,
         ) {
-            if let Some(ref state) = (data as *mut ListenerLocalCallbacks).as_ref() {
+            if let Some(state) = (data as *mut ListenerLocalCallbacks).as_ref() {
                 if let Some(ref cb) = state.param_changed {
                     cb(id, param);
                 }
@@ -385,7 +385,7 @@ impl ListenerLocalCallbacks {
             data: *mut ::std::os::raw::c_void,
             buffer: *mut pw_sys::pw_buffer,
         ) {
-            if let Some(ref state) = (data as *mut ListenerLocalCallbacks).as_ref() {
+            if let Some(state) = (data as *mut ListenerLocalCallbacks).as_ref() {
                 if let Some(ref cb) = state.add_buffer {
                     cb(buffer);
                 }
@@ -396,7 +396,7 @@ impl ListenerLocalCallbacks {
             data: *mut ::std::os::raw::c_void,
             buffer: *mut pw_sys::pw_buffer,
         ) {
-            if let Some(ref state) = (data as *mut ListenerLocalCallbacks).as_ref() {
+            if let Some(state) = (data as *mut ListenerLocalCallbacks).as_ref() {
                 if let Some(ref cb) = state.remove_buffer {
                     cb(buffer);
                 }
@@ -404,7 +404,7 @@ impl ListenerLocalCallbacks {
         }
 
         unsafe extern "C" fn on_process(data: *mut ::std::os::raw::c_void) {
-            if let Some(ref state) = (data as *mut ListenerLocalCallbacks).as_ref() {
+            if let Some(state) = (data as *mut ListenerLocalCallbacks).as_ref() {
                 if let Some(ref cb) = state.process {
                     cb();
                 }
@@ -412,7 +412,7 @@ impl ListenerLocalCallbacks {
         }
 
         unsafe extern "C" fn on_drained(data: *mut ::std::os::raw::c_void) {
-            if let Some(ref state) = (data as *mut ListenerLocalCallbacks).as_ref() {
+            if let Some(state) = (data as *mut ListenerLocalCallbacks).as_ref() {
                 if let Some(ref cb) = state.drained {
                     cb();
                 }

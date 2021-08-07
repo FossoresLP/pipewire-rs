@@ -25,7 +25,7 @@ impl Proxy {
 
     pub fn add_listener_local(&self) -> ProxyListenerLocalBuilder {
         ProxyListenerLocalBuilder {
-            proxy: &self,
+            proxy: self,
             cbs: ListenerLocalCallbacks::default(),
         }
     }
