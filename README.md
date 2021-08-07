@@ -9,7 +9,7 @@
 - [How to contribute](https://gitlab.freedesktop.org/pipewire/pipewire-rs/-/blob/main/CONTRIBUTING.md)
 
 ## Requirements
-- Rust 1.51 or newer
+- Rust 1.53 or newer
 - PipeWire 0.3 development files
 - Clang (see [bindgen requirements](https://rust-lang.github.io/rust-bindgen/requirements.html))
 
