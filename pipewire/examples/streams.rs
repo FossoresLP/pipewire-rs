@@ -37,9 +37,16 @@ pub fn main() -> Result<(), pw::Error> {
     .state_changed(|old, new| {
         println!("State changed: {:?} -> {:?}", old, new);
     })
-    .process(|| {
+    .process(|stream| {
         println!("On frame");
-        // TODO: dequeue buffer and display frame size
+        match stream.dequeue_buffer() {
+            None => println!("No buffer received"),
+            Some(mut buffer) => {
+                let datas = buffer.datas_mut();
+                println!("Got {} datas", datas.len());
+                // TODO: get the frame size and display it
+            }
+        }
     })
     // TODO: connect params_changed
     .create()?;

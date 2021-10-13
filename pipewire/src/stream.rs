@@ -62,6 +62,8 @@ enum KeepAlive {
         _events: Pin<Box<pw_sys::pw_stream_events>>,
         _data: Box<ListenerLocalCallbacks>,
     },
+    // Temporary stream for callbacks
+    Temp,
 }
 
 impl Stream {
@@ -110,7 +112,7 @@ impl Stream {
     /// .state_changed(|old, new| {
     ///     println!("State changed: {:?} -> {:?}", old, new);
     /// })
-    /// .process(|| {
+    /// .process(|_stream| {
     ///     println!("On frame");
     /// })
     /// .create()?;
@@ -316,8 +318,9 @@ pub struct ListenerLocalCallbacks {
     pub param_changed: Option<Box<dyn Fn(u32, *const spa_sys::spa_pod)>>,
     pub add_buffer: Option<Box<dyn Fn(*mut pw_sys::pw_buffer)>>,
     pub remove_buffer: Option<Box<dyn Fn(*mut pw_sys::pw_buffer)>>,
-    pub process: Option<Box<dyn Fn()>>,
+    pub process: Option<Box<dyn Fn(&Stream)>>,
     pub drained: Option<Box<dyn Fn()>>,
+    stream: Option<ptr::NonNull<pw_sys::pw_stream>>,
 }
 
 impl ListenerLocalCallbacks {
@@ -406,7 +409,14 @@ impl ListenerLocalCallbacks {
         unsafe extern "C" fn on_process(data: *mut ::std::os::raw::c_void) {
             if let Some(state) = (data as *mut ListenerLocalCallbacks).as_ref() {
                 if let Some(ref cb) = state.process {
-                    cb();
+                    let stream = state
+                        .stream
+                        .map(|ptr| Stream {
+                            ptr,
+                            _alive: KeepAlive::Temp,
+                        })
+                        .expect("stream cannot be null");
+                    cb(&stream);
                 }
             }
         }
@@ -515,7 +525,7 @@ pub trait ListenerBuilderT: Sized {
     /// Set the callback for the `process` event.
     fn process<F>(mut self, callback: F) -> Self
     where
-        F: Fn() + 'static,
+        F: Fn(&Stream) + 'static,
     {
         self.callbacks().process = Some(Box::new(callback));
         self
@@ -586,7 +596,7 @@ impl<'a> SimpleLocalBuilder<'a> {
     pub fn create(self) -> Result<Stream, Error> {
         let (events, data) = self.callbacks.into_raw();
         let data = Box::into_raw(data);
-        let (stream, data) = unsafe {
+        let (stream, mut data) = unsafe {
             let stream = pw_sys::pw_stream_new_simple(
                 self.main_loop.as_ptr(),
                 self.name.as_ptr(),
@@ -597,6 +607,7 @@ impl<'a> SimpleLocalBuilder<'a> {
             (stream, Box::from_raw(data))
         };
         let stream = ptr::NonNull::new(stream).ok_or(Error::CreationFailed)?;
+        data.stream = Some(stream);
 
         // pw_stream does not keep a pointer on the loop so no need to ensure it stays alive
         Ok(Stream {

@@ -111,39 +111,42 @@
 
 use std::ptr;
 
-mod error;
-pub use error::*;
-mod loop_;
-pub use loop_::*;
-mod main_loop;
-pub use main_loop::*;
-mod context;
 pub use context::*;
-mod core_;
 pub use core_::*;
-mod properties;
+pub use error::*;
+pub use loop_::*;
+pub use main_loop::*;
 pub use properties::*;
-pub mod link;
-pub mod node;
-pub mod port;
-pub mod proxy;
-pub mod registry;
+pub use pw_sys as sys;
 pub use spa;
+
 pub mod buffer;
 pub mod channel;
 pub mod constants;
+mod context;
+mod core_;
+pub mod data;
+mod error;
 pub mod keys;
+pub mod link;
+mod loop_;
+mod main_loop;
+pub mod node;
+pub mod port;
+mod properties;
+pub mod proxy;
+pub mod registry;
 pub mod stream;
 pub mod types;
 mod utils;
-pub use pw_sys as sys;
 
 // Re-export all the traits in a prelude module, so that applications
 // can always "use pipewire::prelude::*" without getting conflicts
 pub mod prelude {
+    pub use spa::prelude::*;
+
     pub use crate::loop_::Loop;
     pub use crate::stream::ListenerBuilderT;
-    pub use spa::prelude::*;
 }
 
 /// Initialize PipeWire
