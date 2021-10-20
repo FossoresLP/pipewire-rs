@@ -217,7 +217,17 @@ where
 {
     // Manually open an eventfd that we can use to signal the loop thread to check for messages
     // via an IoSource.
+    #[cfg(target_os = "linux")]
     let eventfd = unsafe { libc::eventfd(0, libc::EFD_CLOEXEC) };
+    #[cfg(target_os = "freebsd")]
+    let eventfd = {
+        // Added in FreeBSD 13, libc crate doesn't target that yet
+        use std::os::raw::{c_int, c_uint};
+        extern "C" {
+            pub fn eventfd(name: c_uint, flags: c_int) -> c_int;
+        }
+        unsafe { eventfd(0, 0x00100000) }
+    };
     if eventfd == -1 {
         panic!("Failed to create eventfd: {}", errno::errno())
     }
