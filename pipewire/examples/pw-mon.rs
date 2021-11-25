@@ -9,6 +9,7 @@ use std::{rc::Rc, sync::Arc};
 use structopt::StructOpt;
 
 use pw::link::Link;
+use pw::metadata::Metadata;
 use pw::node::Node;
 use pw::port::Port;
 use pw::prelude::*;
@@ -145,6 +146,19 @@ fn monitor(remote: Option<String>) -> Result<()> {
                             .register();
 
                         Some((Box::new(link), Box::new(obj_listener)))
+                    }
+                    ObjectType::Metadata => {
+                        let metadata: Metadata = registry.bind(obj).unwrap();
+                        dbg!(&obj.props);
+                        let obj_listener = metadata
+                            .add_listener_local()
+                            .property(|subject, key, type_, value| {
+                                dbg!((subject, key, type_, value));
+                                0
+                            })
+                            .register();
+
+                        Some((Box::new(metadata), Box::new(obj_listener)))
                     }
                     ObjectType::Module
                     | ObjectType::Device

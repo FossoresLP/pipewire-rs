@@ -131,6 +131,7 @@ pub mod keys;
 pub mod link;
 mod loop_;
 mod main_loop;
+pub mod metadata;
 pub mod node;
 pub mod port;
 mod properties;
