@@ -411,7 +411,7 @@ where
         fn duration_to_timespec(duration: Duration) -> spa_sys::timespec {
             spa_sys::timespec {
                 tv_sec: duration.as_secs().try_into().expect("Duration too long"),
-                tv_nsec: duration.subsec_nanos().into(),
+                tv_nsec: duration.subsec_nanos().try_into().unwrap(),
             }
         }
 
