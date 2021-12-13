@@ -28,6 +28,7 @@ fn main() {
 
     let builder = libs
         .iter()
+        .iter()
         .flat_map(|(_, lib)| lib.include_paths.iter())
         .fold(builder, |builder, l| {
             let arg = format!("-I{}", l.to_string_lossy());
