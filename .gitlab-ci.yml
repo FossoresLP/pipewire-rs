@@ -10,8 +10,8 @@ variables:
   # change to build against a different tag/commit/branch of pipewire
   PIPEWIRE_HEAD: '0.3.32'
 
-# ci-templates as of Jun 24th 2020
-.templates_sha: &templates_sha 9a98f16486904b6406243d6e1407e4dfd71b6263
+# ci-templates as of Jan 11th 2022
+.templates_sha: &templates_sha 34039cd573a2df832d465bc9e4c5f543571f5241
 
 include:
   - project: 'freedesktop/ci-templates'
