@@ -69,7 +69,7 @@ pub unsafe trait Loop {
     }
 
     #[must_use]
-    fn add_signal_local<F>(&self, signal: Signal, callback: F) -> SignalSource<F, Self>
+    fn add_signal_local<F>(&self, signal: Signal, callback: F) -> SignalSource<Self>
     where
         F: Fn() + 'static,
         Self: Sized,
@@ -121,7 +121,7 @@ pub unsafe trait Loop {
     ///
     /// The returned [`EventSource`] can be used to trigger the event.
     #[must_use]
-    fn add_event<F>(&self, callback: F) -> EventSource<F, Self>
+    fn add_event<F>(&self, callback: F) -> EventSource<Self>
     where
         F: Fn() + 'static,
         Self: Sized,
@@ -171,7 +171,7 @@ pub unsafe trait Loop {
     ///
     /// The callback will be provided with the number of timer expirations since the callback was last called.
     #[must_use]
-    fn add_timer<F>(&self, callback: F) -> TimerSource<F, Self>
+    fn add_timer<F>(&self, callback: F) -> TimerSource<Self>
     where
         F: Fn(u64) + 'static,
         Self: Sized,
@@ -277,20 +277,18 @@ where
     }
 }
 
-pub struct SignalSource<'a, F, L>
+pub struct SignalSource<'a, L>
 where
-    F: Fn() + 'static,
     L: Loop,
 {
     ptr: ptr::NonNull<spa_sys::spa_source>,
     loop_: &'a L,
     // Store data wrapper to prevent leak
-    _data: Box<F>,
+    _data: Box<dyn Fn() + 'static>,
 }
 
-impl<'a, F, L> IsASource for SignalSource<'a, F, L>
+impl<'a, L> IsASource for SignalSource<'a, L>
 where
-    F: Fn() + 'static,
     L: Loop,
 {
     fn as_ptr(&self) -> *mut spa_sys::spa_source {
@@ -298,9 +296,8 @@ where
     }
 }
 
-impl<'a, F, L> Drop for SignalSource<'a, F, L>
+impl<'a, L> Drop for SignalSource<'a, L>
 where
-    F: Fn() + 'static,
     L: Loop,
 {
     fn drop(&mut self) {
@@ -313,20 +310,18 @@ where
 /// This source can be obtained by calling [`add_event`](`Loop::add_event`) on a loop, registering a callback to it.
 /// By calling [`signal`](`EventSource::signal`) on the `EventSource`, the loop is signaled that the event has occurred.
 /// It will then call the callback at the next possible occasion.
-pub struct EventSource<'a, F, L>
+pub struct EventSource<'a, L>
 where
-    F: Fn() + 'static,
     L: Loop,
 {
     ptr: ptr::NonNull<spa_sys::spa_source>,
     loop_: &'a L,
     // Store data wrapper to prevent leak
-    _data: Box<F>,
+    _data: Box<dyn Fn() + 'static>,
 }
 
-impl<'a, F, L> IsASource for EventSource<'a, F, L>
+impl<'a, L> IsASource for EventSource<'a, L>
 where
-    F: Fn() + 'static,
     L: Loop,
 {
     fn as_ptr(&self) -> *mut spa_sys::spa_source {
@@ -334,9 +329,8 @@ where
     }
 }
 
-impl<'a, F, L> EventSource<'a, F, L>
+impl<'a, L> EventSource<'a, L>
 where
-    F: Fn() + 'static,
     L: Loop,
 {
     /// Signal the loop associated with this source that the event has occurred,
@@ -365,9 +359,8 @@ where
     }
 }
 
-impl<'a, F, L> Drop for EventSource<'a, F, L>
+impl<'a, L> Drop for EventSource<'a, L>
 where
-    F: Fn() + 'static,
     L: Loop,
 {
     fn drop(&mut self) {
@@ -381,20 +374,18 @@ where
 ///
 /// The timer starts out inactive.
 /// You can arm or disarm the timer by calling [`update_timer`](`Self::update_timer`).
-pub struct TimerSource<'a, F, L>
+pub struct TimerSource<'a, L>
 where
-    F: Fn(u64) + 'static,
     L: Loop,
 {
     ptr: ptr::NonNull<spa_sys::spa_source>,
     loop_: &'a L,
     // Store data wrapper to prevent leak
-    _data: Box<F>,
+    _data: Box<dyn Fn(u64) + 'static>,
 }
 
-impl<'a, F, L> TimerSource<'a, F, L>
+impl<'a, L> TimerSource<'a, L>
 where
-    F: Fn(u64) + 'static,
     L: Loop,
 {
     /// Arm or disarm the timer.
@@ -444,9 +435,8 @@ where
     }
 }
 
-impl<'a, F, L> IsASource for TimerSource<'a, F, L>
+impl<'a, L> IsASource for TimerSource<'a, L>
 where
-    F: Fn(u64) + 'static,
     L: Loop,
 {
     fn as_ptr(&self) -> *mut spa_sys::spa_source {
@@ -454,9 +444,8 @@ where
     }
 }
 
-impl<'a, F, L> Drop for TimerSource<'a, F, L>
+impl<'a, L> Drop for TimerSource<'a, L>
 where
-    F: Fn(u64) + 'static,
     L: Loop,
 {
     fn drop(&mut self) {
