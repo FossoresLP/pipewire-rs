@@ -907,7 +907,7 @@ impl<'de, E: FixedSizedPod> ArrayPodDeserializer<'de, E> {
 
         let result = self
             .deserializer
-            .parse(|input| E::CanonicalType::deserialize_body(input))
+            .parse(E::CanonicalType::deserialize_body)
             .map(|res| E::from_canonical_type(&res))
             .map_err(|err| err.into());
 
