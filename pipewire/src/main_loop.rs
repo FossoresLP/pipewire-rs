@@ -45,9 +45,9 @@ impl Deref for MainLoop {
     }
 }
 
-unsafe impl Loop for MainLoop {
-    fn as_ptr(&self) -> *mut pw_sys::pw_loop {
-        unsafe { pw_sys::pw_main_loop_get_loop(self.inner.as_ptr()) }
+impl Loop for MainLoop {
+    unsafe fn as_ptr(&self) -> *mut pw_sys::pw_loop {
+        pw_sys::pw_main_loop_get_loop(self.inner.as_ptr())
     }
 }
 

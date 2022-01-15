@@ -12,8 +12,10 @@ use crate::utils::assert_main_thread;
 /// A trait for common functionality of the different pipewire loop kinds, most notably [`MainLoop`](`crate::MainLoop`).
 ///
 /// Different kinds of events, such as receiving a signal (e.g. SIGTERM) can be attached to the loop using this trait.
-pub unsafe trait Loop {
-    fn as_ptr(&self) -> *mut pw_sys::pw_loop;
+pub trait Loop {
+    /// # Safety
+    /// The returned pointer must not be null, and must point to a valid, well-aligned `pw_loop`.
+    unsafe fn as_ptr(&self) -> *mut pw_sys::pw_loop;
 
     #[must_use]
     fn add_io<I, F>(&self, io: I, event_mask: IoFlags, callback: F) -> IoSource<I, Self>
