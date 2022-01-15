@@ -11,7 +11,9 @@ use crate::properties::Properties;
 #[derive(Debug)]
 pub struct Context<T: Loop + Clone> {
     ptr: ptr::NonNull<pw_sys::pw_context>,
-    loop_: T,
+    /// Store the loop here, so that the loop is not dropped before the context, which may lead to
+    /// undefined behaviour.
+    _loop: T,
 }
 
 impl<T: Loop + Clone> Context<T> {
@@ -22,7 +24,7 @@ impl<T: Loop + Clone> Context<T> {
 
         Ok(Context {
             ptr: context,
-            loop_: loop_.clone(),
+            _loop: loop_.clone(),
         })
     }
 
