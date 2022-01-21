@@ -4,23 +4,23 @@ use crate::data::Data;
 use std::convert::TryFrom;
 use std::ptr::NonNull;
 
-pub struct Buffer<'s> {
+pub struct Buffer<'s, D> {
     buf: NonNull<pw_sys::pw_buffer>,
 
     /// In Pipewire, buffers are owned by the stream that generated them.
     /// This reference ensures that this rule is respected.
-    stream: &'s Stream,
+    stream: &'s Stream<D>,
 
     /// An empty array of `Data`, that can be used to return an empty slice
     /// when a buffer has no data.
     empty_data: [Data; 0],
 }
 
-impl Buffer<'_> {
+impl<D> Buffer<'_, D> {
     pub(crate) unsafe fn from_raw(
         buf: *mut pw_sys::pw_buffer,
-        stream: &Stream,
-    ) -> Option<Buffer<'_>> {
+        stream: &Stream<D>,
+    ) -> Option<Buffer<'_, D>> {
         NonNull::new(buf).map(|buf| Buffer {
             buf,
             stream,
@@ -46,7 +46,7 @@ impl Buffer<'_> {
     }
 }
 
-impl Drop for Buffer<'_> {
+impl<D> Drop for Buffer<'_, D> {
     fn drop(&mut self) {
         unsafe {
             self.stream.queue_raw_buffer(self.buf.as_ptr());

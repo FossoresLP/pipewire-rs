@@ -7,6 +7,7 @@ use crate::buffer::Buffer;
 use crate::{error::Error, Core, Loop, MainLoop, Properties, PropertiesRef};
 use bitflags::bitflags;
 use spa::result::SpaResult;
+use std::fmt::Debug;
 use std::{
     ffi::{self, CStr, CString},
     mem, os,
@@ -46,13 +47,14 @@ impl StreamState {
 /// A wrapper around the pipewire stream interface. Streams are a higher
 /// level abstraction around nodes in the graph. A stream can be used to send or
 /// receive frames of audio of video data by connecting it to another node.
-pub struct Stream {
+/// `D` is the user data, to allow passing extra context to the callbacks.
+pub struct Stream<D> {
     ptr: ptr::NonNull<pw_sys::pw_stream>,
     // objects that need to stay alive while the Stream is
-    _alive: KeepAlive,
+    _alive: KeepAlive<D>,
 }
 
-enum KeepAlive {
+enum KeepAlive<D> {
     // Stream created with Stream::new()
     Normal {
         _core: Core,
@@ -60,13 +62,13 @@ enum KeepAlive {
     // Stream created with Stream::simple()
     Simple {
         _events: Pin<Box<pw_sys::pw_stream_events>>,
-        _data: Box<ListenerLocalCallbacks>,
+        _data: Box<ListenerLocalCallbacks<D>>,
     },
     // Temporary stream for callbacks
     Temp,
 }
 
-impl Stream {
+impl<D> Stream<D> {
     /// Create a [`Stream`]
     ///
     /// Initialises a new stream with the given `name` and `properties`.
@@ -84,7 +86,7 @@ impl Stream {
         })
     }
 
-    /// Create a [`Stream`] and connect its event.
+    /// Create a [`Stream`] with custom user data, and connect its event.
     ///
     /// Create a stream directly from a [`MainLoop`]. This avoids having to create
     /// a [`crate::Context`] and [`Core`] yourself in cases that don't require anything
@@ -100,7 +102,7 @@ impl Stream {
     ///
     /// let mainloop = pipewire::MainLoop::new()?;
     ///
-    /// let mut stream = pipewire::stream::Stream::simple(
+    /// let mut stream = pipewire::stream::Stream::<i32>::with_user_data(
     ///     &mainloop,
     ///     "video-test",
     ///     properties! {
@@ -108,38 +110,42 @@ impl Stream {
     ///         *pipewire::keys::MEDIA_CATEGORY => "Capture",
     ///         *pipewire::keys::MEDIA_ROLE => "Camera",
     ///     },
+    ///     42,
     /// )
     /// .state_changed(|old, new| {
     ///     println!("State changed: {:?} -> {:?}", old, new);
     /// })
-    /// .process(|_stream| {
+    /// .process(|_stream, _user_data| {
     ///     println!("On frame");
     /// })
     /// .create()?;
     /// # Ok::<(), pipewire::Error>(())
     /// ```
-    #[must_use]
-    pub fn simple<'a>(
+    pub fn with_user_data<'a>(
         main_loop: &'a MainLoop,
         name: &str,
         properties: Properties,
-    ) -> SimpleLocalBuilder<'a> {
+        user_data: D,
+    ) -> SimpleLocalBuilder<'a, D> {
         let name = CString::new(name).expect("Invalid byte in stream name");
 
-        SimpleLocalBuilder {
+        SimpleLocalBuilder::<D> {
             main_loop,
             name,
             properties,
-            callbacks: Default::default(),
+            callbacks: ListenerLocalCallbacks::with_user_data(user_data),
         }
     }
 
     /// Add a local listener builder
     #[must_use = "Fluent builder API"]
-    pub fn add_local_listener(&mut self) -> ListenerLocalBuilder<'_> {
+    pub fn add_local_listener_with_user_data(
+        &mut self,
+        user_data: D,
+    ) -> ListenerLocalBuilder<'_, D> {
         ListenerLocalBuilder {
             stream: self,
-            callbacks: Default::default(),
+            callbacks: ListenerLocalCallbacks::with_user_data(user_data),
         }
     }
 
@@ -202,12 +208,11 @@ impl Stream {
     ///
     /// The pointer returned could be NULL if no buffer is available. The buffer
     /// should be returned to the stream once processing is complete.
-    // FIXME: provide safe queue and dequeue API
     pub unsafe fn dequeue_raw_buffer(&self) -> *mut pw_sys::pw_buffer {
         pw_sys::pw_stream_dequeue_buffer(self.as_ptr())
     }
 
-    pub fn dequeue_buffer(&self) -> Option<Buffer> {
+    pub fn dequeue_buffer(&self) -> Option<Buffer<D>> {
         unsafe { Buffer::from_raw(self.dequeue_raw_buffer(), self) }
     }
 
@@ -242,7 +247,7 @@ impl Stream {
     /// # Panics
     /// Will panic if `error` contains a 0 byte.
     ///
-    pub fn set_error(&self, res: i32, error: &str) {
+    pub fn set_error(&mut self, res: i32, error: &str) {
         let error = CString::new(error).expect("failed to convert error to CString");
         unsafe {
             pw_sys::pw_stream_set_error(self.as_ptr(), res, error.as_c_str().as_ptr());
@@ -298,7 +303,61 @@ impl Stream {
     // TODO: pw_stream_get_time()
 }
 
-impl std::fmt::Debug for Stream {
+impl<D: Default> Stream<D> {
+    /// Create a [`Stream`] and connect its event.
+    ///
+    /// Create a stream directly from a [`MainLoop`]. This avoids having to create
+    /// a [`crate::Context`] and [`Core`] yourself in cases that don't require anything
+    /// special.
+    ///
+    /// # Panics
+    /// Will panic if `name` contains a 0 byte.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use pipewire::prelude::*;
+    /// use pipewire::properties;
+    ///
+    /// let mainloop = pipewire::MainLoop::new()?;
+    ///
+    /// let mut stream = pipewire::stream::Stream::<()>::simple(
+    ///     &mainloop,
+    ///     "video-test",
+    ///     properties! {
+    ///         *pipewire::keys::MEDIA_TYPE => "Video",
+    ///         *pipewire::keys::MEDIA_CATEGORY => "Capture",
+    ///         *pipewire::keys::MEDIA_ROLE => "Camera",
+    ///     },
+    /// )
+    /// .state_changed(|old, new| {
+    ///     println!("State changed: {:?} -> {:?}", old, new);
+    /// })
+    /// .process(|_stream, _user_data| {
+    ///     println!("On frame");
+    /// })
+    /// .create()?;
+    /// # Ok::<(), pipewire::Error>(())
+    /// ```
+    #[must_use]
+    pub fn simple<'a>(
+        main_loop: &'a MainLoop,
+        name: &str,
+        properties: Properties,
+    ) -> SimpleLocalBuilder<'a, D> {
+        Self::with_user_data(main_loop, name, properties, Default::default())
+    }
+
+    /// Add a local listener builder
+    #[must_use = "Fluent builder API"]
+    pub fn add_local_listener(&mut self) -> ListenerLocalBuilder<'_, D> {
+        ListenerLocalBuilder {
+            stream: self,
+            callbacks: ListenerLocalCallbacks::with_user_data(Default::default()),
+        }
+    }
+}
+
+impl<D> std::fmt::Debug for Stream<D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Stream")
             .field("name", &self.name())
@@ -309,36 +368,54 @@ impl std::fmt::Debug for Stream {
     }
 }
 
-#[derive(Default)]
-pub struct ListenerLocalCallbacks {
+type ParamChangedCB<D> = dyn Fn(u32, &mut D, *const spa_sys::spa_pod);
+type ProcessCB<D> = dyn Fn(&Stream<D>, &mut D);
+
+pub struct ListenerLocalCallbacks<D> {
     pub state_changed: Option<Box<dyn Fn(StreamState, StreamState)>>,
     pub control_info: Option<Box<dyn Fn(u32, *const pw_sys::pw_stream_control)>>,
     #[allow(clippy::type_complexity)]
     pub io_changed: Option<Box<dyn Fn(u32, *mut os::raw::c_void, u32)>>,
-    pub param_changed: Option<Box<dyn Fn(u32, *const spa_sys::spa_pod)>>,
+    pub param_changed: Option<Box<ParamChangedCB<D>>>,
     pub add_buffer: Option<Box<dyn Fn(*mut pw_sys::pw_buffer)>>,
     pub remove_buffer: Option<Box<dyn Fn(*mut pw_sys::pw_buffer)>>,
-    pub process: Option<Box<dyn Fn(&Stream)>>,
+    pub process: Option<Box<ProcessCB<D>>>,
     pub drained: Option<Box<dyn Fn()>>,
+    pub user_data: D,
     stream: Option<ptr::NonNull<pw_sys::pw_stream>>,
 }
 
-impl ListenerLocalCallbacks {
+impl<D> ListenerLocalCallbacks<D> {
+    fn with_user_data(user_data: D) -> Self {
+        ListenerLocalCallbacks {
+            process: Default::default(),
+            stream: Default::default(),
+            drained: Default::default(),
+            add_buffer: Default::default(),
+            control_info: Default::default(),
+            io_changed: Default::default(),
+            param_changed: Default::default(),
+            remove_buffer: Default::default(),
+            state_changed: Default::default(),
+            user_data,
+        }
+    }
+
     pub(crate) fn into_raw(
         self,
     ) -> (
         Pin<Box<pw_sys::pw_stream_events>>,
-        Box<ListenerLocalCallbacks>,
+        Box<ListenerLocalCallbacks<D>>,
     ) {
         let callbacks = Box::new(self);
 
-        unsafe extern "C" fn on_state_changed(
+        unsafe extern "C" fn on_state_changed<D>(
             data: *mut os::raw::c_void,
             old: pw_sys::pw_stream_state,
             new: pw_sys::pw_stream_state,
             error: *const os::raw::c_char,
         ) {
-            if let Some(state) = (data as *mut ListenerLocalCallbacks).as_ref() {
+            if let Some(state) = (data as *mut ListenerLocalCallbacks<D>).as_ref() {
                 if let Some(ref cb) = state.state_changed {
                     let old = StreamState::from_raw(old, error);
                     let new = StreamState::from_raw(new, error);
@@ -347,67 +424,67 @@ impl ListenerLocalCallbacks {
             }
         }
 
-        unsafe extern "C" fn on_control_info(
+        unsafe extern "C" fn on_control_info<D>(
             data: *mut os::raw::c_void,
             id: u32,
             control: *const pw_sys::pw_stream_control,
         ) {
-            if let Some(state) = (data as *mut ListenerLocalCallbacks).as_ref() {
+            if let Some(state) = (data as *mut ListenerLocalCallbacks<D>).as_ref() {
                 if let Some(ref cb) = state.control_info {
                     cb(id, control);
                 }
             }
         }
 
-        unsafe extern "C" fn on_io_changed(
+        unsafe extern "C" fn on_io_changed<D>(
             data: *mut os::raw::c_void,
             id: u32,
             area: *mut os::raw::c_void,
             size: u32,
         ) {
-            if let Some(state) = (data as *mut ListenerLocalCallbacks).as_ref() {
+            if let Some(state) = (data as *mut ListenerLocalCallbacks<D>).as_ref() {
                 if let Some(ref cb) = state.io_changed {
                     cb(id, area, size);
                 }
             }
         }
 
-        unsafe extern "C" fn on_param_changed(
+        unsafe extern "C" fn on_param_changed<D>(
             data: *mut os::raw::c_void,
             id: u32,
             param: *const spa_sys::spa_pod,
         ) {
-            if let Some(state) = (data as *mut ListenerLocalCallbacks).as_ref() {
+            if let Some(state) = (data as *mut ListenerLocalCallbacks<D>).as_mut() {
                 if let Some(ref cb) = state.param_changed {
-                    cb(id, param);
+                    cb(id, &mut state.user_data, param);
                 }
             }
         }
 
-        unsafe extern "C" fn on_add_buffer(
+        unsafe extern "C" fn on_add_buffer<D>(
             data: *mut ::std::os::raw::c_void,
             buffer: *mut pw_sys::pw_buffer,
         ) {
-            if let Some(state) = (data as *mut ListenerLocalCallbacks).as_ref() {
+            if let Some(state) = (data as *mut ListenerLocalCallbacks<D>).as_ref() {
                 if let Some(ref cb) = state.add_buffer {
                     cb(buffer);
                 }
             }
         }
 
-        unsafe extern "C" fn on_remove_buffer(
+        unsafe extern "C" fn on_remove_buffer<D>(
             data: *mut ::std::os::raw::c_void,
             buffer: *mut pw_sys::pw_buffer,
         ) {
-            if let Some(state) = (data as *mut ListenerLocalCallbacks).as_ref() {
+            if let Some(state) = (data as *mut ListenerLocalCallbacks<D>).as_ref() {
                 if let Some(ref cb) = state.remove_buffer {
                     cb(buffer);
                 }
             }
         }
 
-        unsafe extern "C" fn on_process(data: *mut ::std::os::raw::c_void) {
-            if let Some(state) = (data as *mut ListenerLocalCallbacks).as_ref() {
+        unsafe extern "C" fn on_process<D>(data: *mut ::std::os::raw::c_void) {
+            if let Some(state) = (data as *mut ListenerLocalCallbacks<D>).as_mut() {
                 if let Some(ref cb) = state.process {
                     let stream = state
                         .stream
@@ -416,13 +493,13 @@ impl ListenerLocalCallbacks {
                             _alive: KeepAlive::Temp,
                         })
                         .expect("stream cannot be null");
-                    cb(&stream);
+                    cb(&stream, &mut state.user_data);
                 }
             }
         }
 
-        unsafe extern "C" fn on_drained(data: *mut ::std::os::raw::c_void) {
-            if let Some(state) = (data as *mut ListenerLocalCallbacks).as_ref() {
+        unsafe extern "C" fn on_drained<D>(data: *mut ::std::os::raw::c_void) {
+            if let Some(state) = (data as *mut ListenerLocalCallbacks<D>).as_ref() {
                 if let Some(ref cb) = state.drained {
                     cb();
                 }
@@ -434,28 +511,28 @@ impl ListenerLocalCallbacks {
             events.version = pw_sys::PW_VERSION_STREAM_EVENTS;
 
             if callbacks.state_changed.is_some() {
-                events.state_changed = Some(on_state_changed);
+                events.state_changed = Some(on_state_changed::<D>);
             }
             if callbacks.control_info.is_some() {
-                events.control_info = Some(on_control_info);
+                events.control_info = Some(on_control_info::<D>);
             }
             if callbacks.io_changed.is_some() {
-                events.io_changed = Some(on_io_changed);
+                events.io_changed = Some(on_io_changed::<D>);
             }
             if callbacks.param_changed.is_some() {
-                events.param_changed = Some(on_param_changed);
+                events.param_changed = Some(on_param_changed::<D>);
             }
             if callbacks.add_buffer.is_some() {
-                events.add_buffer = Some(on_add_buffer);
+                events.add_buffer = Some(on_add_buffer::<D>);
             }
             if callbacks.remove_buffer.is_some() {
-                events.remove_buffer = Some(on_remove_buffer);
+                events.remove_buffer = Some(on_remove_buffer::<D>);
             }
             if callbacks.process.is_some() {
-                events.process = Some(on_process);
+                events.process = Some(on_process::<D>);
             }
             if callbacks.drained.is_some() {
-                events.drained = Some(on_drained);
+                events.drained = Some(on_drained::<D>);
             }
 
             events
@@ -465,8 +542,8 @@ impl ListenerLocalCallbacks {
     }
 }
 
-pub trait ListenerBuilderT: Sized {
-    fn callbacks(&mut self) -> &mut ListenerLocalCallbacks;
+pub trait ListenerBuilderT<D>: Sized {
+    fn callbacks(&mut self) -> &mut ListenerLocalCallbacks<D>;
 
     /// Set the callback for the `state_changed` event.
     fn state_changed<F>(mut self, callback: F) -> Self
@@ -498,7 +575,7 @@ pub trait ListenerBuilderT: Sized {
     /// Set the callback for the `param_changed` event.
     fn param_changed<F>(mut self, callback: F) -> Self
     where
-        F: Fn(u32, *const spa_sys::spa_pod) + 'static,
+        F: Fn(u32, &mut D, *const spa_sys::spa_pod) + 'static,
     {
         self.callbacks().param_changed = Some(Box::new(callback));
         self
@@ -525,7 +602,7 @@ pub trait ListenerBuilderT: Sized {
     /// Set the callback for the `process` event.
     fn process<F>(mut self, callback: F) -> Self
     where
-        F: Fn(&Stream) + 'static,
+        F: Fn(&Stream<D>, &mut D) + 'static,
     {
         self.callbacks().process = Some(Box::new(callback));
         self
@@ -541,23 +618,23 @@ pub trait ListenerBuilderT: Sized {
     }
 }
 
-pub struct ListenerLocalBuilder<'a> {
-    stream: &'a mut Stream,
-    callbacks: ListenerLocalCallbacks,
+pub struct ListenerLocalBuilder<'a, D> {
+    stream: &'a mut Stream<D>,
+    callbacks: ListenerLocalCallbacks<D>,
 }
 
-impl<'a> ListenerBuilderT for ListenerLocalBuilder<'a> {
-    fn callbacks(&mut self) -> &mut ListenerLocalCallbacks {
+impl<'a, D: Default> ListenerBuilderT<D> for ListenerLocalBuilder<'a, D> {
+    fn callbacks(&mut self) -> &mut ListenerLocalCallbacks<D> {
         &mut self.callbacks
     }
 }
 
-impl<'a> ListenerLocalBuilder<'a> {
+impl<'a, D> ListenerLocalBuilder<'a, D> {
     //// Register the Callbacks
     ///
     /// Stop building the listener and register it on the stream. Returns a
     /// `StreamListener` handlle that will un-register the listener on drop.
-    pub fn register(self) -> Result<StreamListener, Error> {
+    pub fn register(self) -> Result<StreamListener<D>, Error> {
         let (events, data) = self.callbacks.into_raw();
         let (listener, data) = unsafe {
             let listener: Box<spa_sys::spa_hook> = Box::new(mem::zeroed());
@@ -579,21 +656,21 @@ impl<'a> ListenerLocalBuilder<'a> {
     }
 }
 
-pub struct SimpleLocalBuilder<'a> {
+pub struct SimpleLocalBuilder<'a, D> {
     main_loop: &'a MainLoop,
     name: CString,
     properties: Properties,
-    callbacks: ListenerLocalCallbacks,
+    callbacks: ListenerLocalCallbacks<D>,
 }
 
-impl<'a> ListenerBuilderT for SimpleLocalBuilder<'a> {
-    fn callbacks(&mut self) -> &mut ListenerLocalCallbacks {
+impl<'a, D> ListenerBuilderT<D> for SimpleLocalBuilder<'a, D> {
+    fn callbacks(&mut self) -> &mut ListenerLocalCallbacks<D> {
         &mut self.callbacks
     }
 }
 
-impl<'a> SimpleLocalBuilder<'a> {
-    pub fn create(self) -> Result<Stream, Error> {
+impl<'a, D> SimpleLocalBuilder<'a, D> {
+    pub fn create(self) -> Result<Stream<D>, Error> {
         let (events, data) = self.callbacks.into_raw();
         let data = Box::into_raw(data);
         let (stream, mut data) = unsafe {
@@ -620,14 +697,14 @@ impl<'a> SimpleLocalBuilder<'a> {
     }
 }
 
-pub struct StreamListener {
+pub struct StreamListener<D> {
     listener: Box<spa_sys::spa_hook>,
     // Need to stay allocated while the listener is registered
     _events: Pin<Box<pw_sys::pw_stream_events>>,
-    _data: Box<ListenerLocalCallbacks>,
+    _data: Box<ListenerLocalCallbacks<D>>,
 }
 
-impl StreamListener {
+impl<D> StreamListener<D> {
     /// Stop the listener from receiving any events
     ///
     /// Removes the listener registration and cleans up allocated ressources.
@@ -636,7 +713,7 @@ impl StreamListener {
     }
 }
 
-impl std::ops::Drop for StreamListener {
+impl<D> std::ops::Drop for StreamListener<D> {
     fn drop(&mut self) {
         spa::hook::remove(*self.listener);
     }

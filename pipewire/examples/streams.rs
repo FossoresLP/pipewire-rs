@@ -25,7 +25,7 @@ pub fn main() -> Result<(), pw::Error> {
 
     let mainloop = pw::MainLoop::new()?;
 
-    let stream = pw::stream::Stream::simple(
+    let stream = pw::stream::Stream::<i32>::with_user_data(
         &mainloop,
         "video-test",
         properties! {
@@ -33,17 +33,19 @@ pub fn main() -> Result<(), pw::Error> {
             *pw::keys::MEDIA_CATEGORY => "Capture",
             *pw::keys::MEDIA_ROLE => "Camera",
         },
+        0,
     )
     .state_changed(|old, new| {
         println!("State changed: {:?} -> {:?}", old, new);
     })
-    .process(|stream| {
+    .process(|stream, frame_count| {
         println!("On frame");
         match stream.dequeue_buffer() {
             None => println!("No buffer received"),
             Some(mut buffer) => {
                 let datas = buffer.datas_mut();
-                println!("Got {} datas", datas.len());
+                println!("Frame {}. Got {} datas.", frame_count, datas.len());
+                *frame_count += 1;
                 // TODO: get the frame size and display it
             }
         }
