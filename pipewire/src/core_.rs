@@ -24,7 +24,7 @@ pub struct Core {
 }
 
 impl Core {
-    pub(crate) fn from_ptr(ptr: ptr::NonNull<pw_sys::pw_core>) -> Self {
+    pub fn from_ptr(ptr: ptr::NonNull<pw_sys::pw_core>) -> Self {
         let inner = CoreInner::from_ptr(ptr);
         Self {
             inner: Rc::new(inner),
